@@ -175,9 +175,19 @@ class owis:
             else:
                 self.ser.write(cmd + "\r\n")
                 answer = self.ser.readline()
-                print (answer, bin(int(answer)))
+                #print (answer, bin(int(answer)))
+                print answer
 
-        return True        
+        return True     
+
+    def motorOff(self):
+
+        # turn x, y, z-motor off
+        for i in range(1, 4):        
+            self.ser.write("MOFF" + str(i) + "\r\n")           
+        print "Motors are off..."
+
+
 
 
 # main loop
@@ -186,8 +196,8 @@ if __name__=='__main__':
 
     o = owis()
     o.init()
-#    o.test()
+    o.test()
 #    o.moveAbs(100000, 100000, 0)
-    o.ref()
+#    o.ref()
 
 
