@@ -1,6 +1,7 @@
 # coding=utf-8
 import serial
 import time
+import sys 
 
 class owis:
 
@@ -33,6 +34,12 @@ class owis:
             self.curPos.append(self.ser.readline().replace("\r",""))  
       
         print "Current position [x, y, z]: " + str(self.curPos).replace("'","")
+        
+        for val in self.curPos:
+            if int(val) < 0:
+                sys.exit("Unexpected axis positions. Motor needs to be calibrated.")
+            else:
+                pass                 
 
 
 
@@ -42,28 +49,38 @@ class owis:
     # Strombereich der Motorendstufe. Erst dann kann gefahren werden.
 
         
-#        # Motortyp waehlen (3 = Schrittmotor Closed-Loop)
+#        # set motor type (3 = Schrittmotor Closed-Loop)
 #        self.ser.write("MOTYPE3\r\n")
-#        # Strombereich für Achse 1/2/3 waehlen (0 = niedrig)        
+#        # set current range (Strombereich) for x, y, z (0 = low)        
 #        for i in range(1, 4):        
 #            self.ser.write("AMPSHNT" + str(i) + "=0\r\n")  
+#        # set end switch mask (Endschaltermaske) for x, y, z
+#        for i in range(1, 4):        
+#            self.ser.write("SMK" + str(i) + "=0110\r\n")        
              
        
     
     def ref(self):
 
-        # choose reference mask (Referenzmaske) for x, y, z      
-        for i in range(1, 4):        
-            self.ser.write("RMK" + str(i) + "=0001\r\n")
-        # choose reference polarity (Referenzpolaritaet) for x, y, z
-        for i in range(1, 4):        
-            self.ser.write("RPL" + str(i) + "=0001\r\n")
-        # choose reference mode (Referenzfahrtmodus) for x, y, z
+#        # set reference mask (Referenzmaske) for x, y, z      
+#        for i in range(1, 4):        
+#            self.ser.write("RMK" + str(i) + "=0001\r\n")
+
+#        # set reference polarity (Referenzpolaritaet) for x, y, z
+#        for i in range(1, 4):        
+#            self.ser.write("RPL" + str(i) + "=1111\r\n")
+
+        # set reference mode (Referenzfahrtmodus) and start reference run for x, y, z
         for i in range(1, 4):        
             self.ser.write("REF" + str(i) + "=4\r\n")
+        
+        self.checkPos(["0","0","0"],0.2)
+        print "Reference run finished..."
+
         # status request for x, y, z         
         self.ser.write("?ASTAT\r\n") 
-
+        print self.ser.readline()
+        
         return True
 
         
@@ -74,8 +91,9 @@ class owis:
         if self.ser.isOpen():
             print(self.ser.name + ' is open...')
         else:
-            print "Could not find device :("
-            exit()
+        # raises error "could not open port"
+            sys.exit("Could not find device :(") 
+         
 
         return True
 
@@ -157,7 +175,7 @@ class owis:
             else:
                 self.ser.write(cmd + "\r\n")
                 answer = self.ser.readline()
-                print answer
+                print (answer, bin(int(answer)))
 
         return True        
 
@@ -168,8 +186,8 @@ if __name__=='__main__':
 
     o = owis()
     o.init()
-    o.test()
-#    o.moveAbs(800000, 800000, 100000)
-
+#    o.test()
+#    o.moveAbs(100000, 100000, 0)
+    o.ref()
 
 
