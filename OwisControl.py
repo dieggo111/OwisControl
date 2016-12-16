@@ -70,6 +70,10 @@ class owis:
 #        for i in range(1, 4):        
 #            self.ser.write("RPL" + str(i) + "=1111\r\n")
 
+#        # set reference run velocity for x, y, z (std val = 41943)
+#        for i in range(1, 4):        
+#            self.ser.write("RVELS" + str(i) + "=2000\r\n")
+       
         # set reference mode (Referenzfahrtmodus) and start reference run for x, y, z
         for i in range(1, 4):        
             self.ser.write("REF" + str(i) + "=4\r\n")
@@ -79,7 +83,7 @@ class owis:
 
         # status request for x, y, z         
         self.ser.write("?ASTAT\r\n") 
-        print self.ser.readline()
+        print "Current status of x, y, z-axis: " + self.ser.readline()
         
         return True
 
@@ -120,22 +124,23 @@ class owis:
 
 
     def moveAbs(self, x, y, z):
-       
+
+        # check if request is within boundaries       
         if 0 > x > 1400000 or 0 > y > 1400000 or 0 > z > 100000:
-            print "Out of range!"
-            exit()
+            sys.exit("Out of range!") 
         
         newPos = [str(x), str(y), str(z)]
 
-        # send new position to controller and start motor movement
+        # send new destination to controller and start motor movement
         for i, val in enumerate(newPos):        
             self.ser.write("PSET" + str(i+1) + "=" + newPos[i] + "\r\n")                
             self.ser.write("PGO" + str(i+1) + "\r\n")
         print "Moving to new position..."
 
-        # status request: check current position until goal is reached
+        # status request: check current position until destination is reached
         self.checkPos(newPos, 0.2)
         
+        # print current destination
         for i, val in enumerate(newPos):        
             self.ser.write("?PSET" + str(i+1) + "\r\n")
             self.curPos[i] = self.ser.readline().replace("\r","")        
@@ -159,12 +164,53 @@ class owis:
                 print "Position reached..."                
                 break
 
-        return True
-
-    def Zdrive(self, z):
-        
+        return True        
+                        
+    
         return True    
     
+    def moveAbsXY(self, x, y, Z = None):
+
+        # get current z-position
+        if Z == None:
+            self.ser.write("?CNT3\r\n")
+            Z = self.ser.readline().replace("\r","")
+        else:
+            self.moveAbs(x, y, Z)
+
+        return True
+
+
+    def moveAbsZ(self, z):        
+        
+        # get current xy-position
+        self.ser.write("?CNT1\r\n")
+        X = self.ser.readline().replace("\r","")
+        self.ser.write("?CNT2\r\n")
+        Y = self.ser.readline().replace("\r","")
+
+        self.moveAbs(X, Y, z)
+
+        return True
+
+
+    def probe_moveAbs(self, x, y):
+        
+        # xy- needs to be seperated from z-movement for most probe station applications   
+
+        # get current z-position and make sure z-drive is possible
+        self.ser.write("?CNT3\r\n")
+        z = self.ser.readline().replace("\r","")
+        if int(z) < 1000:
+            sys.exit("Probe station movement is not possible without a 1000mu z-drive offset!")
+        else:
+            self.moveAbsZ(z-1000)
+
+        self.moveAbsXY(x, y, z-1000)
+
+
+        return True
+
 
     def test(self):
 
@@ -196,8 +242,8 @@ if __name__=='__main__':
 
     o = owis()
     o.init()
-    o.test()
-#    o.moveAbs(100000, 100000, 0)
+#    o.test()
+    o.moveAbs(100000, 100000, 500000)
 #    o.ref()
-
+#    o.moveAbsZ()
 
