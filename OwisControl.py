@@ -6,18 +6,19 @@ import sys
 class owis:
 
     def __init__(self):
+
+        self.xRange = 1400000     
+        self.yRange = 1400000
+        self.zRange = 600000 
         
         port = "COM5"
         baud = 9600
         bytesize = 8                    
             
-        self.ser = serial.Serial(port, baud, bytesize, timeout=0.1)
-
-        # timeout needs to be >= 0.1 for the controller to be able to answer a call     
+        self.ser = serial.Serial(port, baud, bytesize, timeout=0.12)
 
 
     def init(self):
-
 
         print "Initializing..."
 
@@ -27,6 +28,11 @@ class owis:
         for i in range(1, 4):        
             self.ser.write("INIT" + str(i) + "\r\n")
 
+        # set denominator of conversion factor for position calculation
+        # default val: x = 10000, y = 10000, z = 50000        
+        for i in range(1, 4):        
+            self.ser.write("WMSFAKN" + str(i) + "=10000\r\n")
+       
         # request current position
         self.curPos = []
         for i in range(1, 4):        
@@ -36,12 +42,14 @@ class owis:
         print "Current position [x, y, z]: " + str(self.curPos).replace("'","")
         
         for val in self.curPos:
-            if int(val) < 0:
+            if val == "":
+                sys.exit("Communication error: Could not get proper position information in time.")
+            elif val != None and int(val) < 0:
                 sys.exit("Unexpected axis positions. Motor needs to be calibrated.")
             else:
                 pass                 
 
-
+        return True
 
 
     # Folgende Parameter muessen beim Initialisieren uebermittelt werden: Motortyp,
@@ -70,9 +78,9 @@ class owis:
 #        for i in range(1, 4):        
 #            self.ser.write("RPL" + str(i) + "=1111\r\n")
 
-#        # set reference run velocity for x, y, z (std val = 41943)
-#        for i in range(1, 4):        
-#            self.ser.write("RVELS" + str(i) + "=2000\r\n")
+        # set reference run velocity for x, y, z (std val = 41943)
+        for i in range(1, 4):        
+            self.ser.write("RVELS" + str(i) + "=10000\r\n")
        
         # set reference mode (Referenzfahrtmodus) and start reference run for x, y, z
         for i in range(1, 4):        
@@ -87,7 +95,6 @@ class owis:
         
         return True
 
-        
 
     def checkCOM(self):
 
@@ -126,8 +133,7 @@ class owis:
     def moveAbs(self, x, y, z):
 
         # check if request is within boundaries       
-        if 0 > x > 1400000 or 0 > y > 1400000 or 0 > z > 100000:
-            sys.exit("Out of range!") 
+        self.checkRange(x, y, z)
         
         newPos = [str(x), str(y), str(z)]
 
@@ -163,12 +169,10 @@ class owis:
             else:
                 print "Position reached..."                
                 break
-
-        return True        
-                        
-    
+                            
         return True    
     
+
     def moveAbsXY(self, x, y, Z = None):
 
         # get current z-position
@@ -208,7 +212,6 @@ class owis:
 
         self.moveAbsXY(x, y, z-1000)
 
-
         return True
 
 
@@ -226,6 +229,7 @@ class owis:
 
         return True     
 
+
     def motorOff(self):
 
         # turn x, y, z-motor off
@@ -233,7 +237,18 @@ class owis:
             self.ser.write("MOFF" + str(i) + "\r\n")           
         print "Motors are off..."
 
+        return True
 
+
+    def checkRange(self, x, y, z):
+
+        if x not in range(0, self.xRange+1) or y not in range(0, self.yRange+1) or z not in range(0, self.zRange+1): 
+            sys.exit("Destination is out of motor range!") 
+        else:
+            pass
+
+        return True     
+    
 
 
 # main loop
@@ -242,13 +257,10 @@ if __name__=='__main__':
 
     o = owis()
     o.init()
-    o.test()
-#    o.moveAbs(100001, 100001, 500001)
+#    o.test()
+#    o.moveAbs(1400000, 2000000, 600000)
 #    o.ref()
 #    o.moveAbsZ()
+    o.motorOff()
 
-
-###########################################
-# x,y : 100000 = 10mm | z : 500000 = 10mm #
-###########################################
 
