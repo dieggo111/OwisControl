@@ -5,7 +5,7 @@ import sys, os
 
 class owis:
 
-    def __init__(self):
+    def __init__(self, port=None):
 
 #        self.logPath = os.getcwd()
 
@@ -19,11 +19,16 @@ class owis:
 
         self.zDrive = 50000
         
-        port = "COM5"
+        if port == None:
+            port = "COM4"
+        else: 
+            pass
+    
         baud = 9600
         bytesize = 8                    
             
         self.ser = serial.Serial(port, baud, bytesize, timeout=0.12)
+
 
 
     def init(self):
@@ -87,6 +92,11 @@ class owis:
 #            self.ser.write("SMK" + str(i) + "=0110\r\n")        
              
        
+    def getPos(self):
+
+        return self.curPos             
+
+
     
     def ref(self):
 
@@ -106,13 +116,9 @@ class owis:
         for i in range(1, 4):        
             self.ser.write("REF" + str(i) + "=4\r\n")
         
-        self.checkPos(["0","0","0"],0.2)
+        self.checkStatus()
         print "Reference run finished..."
 
-        # status request for x, y, z         
-        self.ser.write("?ASTAT\r\n") 
-        print "Current status of x, y, z-axis: " + self.ser.readline()
-        
         return True
 
 
@@ -172,7 +178,7 @@ class owis:
             self.curPos[i] = self.ser.readline().replace("\r","")        
         print "New position [x, y, z]: " + str(self.curPos).replace("'","")   
 
-        return True
+        return self.curPos
 
 
     def printPos(self, posList):
@@ -192,7 +198,7 @@ class owis:
         return True    
     
 
-    def checkPos(self):
+    def checkStatus(self):
 
         while True:
             self.ser.write("?ASTAT" + "\r\n")
@@ -212,7 +218,7 @@ class owis:
             self.ser.write("PGO" + str(i) + "=" + newPosXY[i-1] + "\r\n")
 
         while True:
-            if self.checkPos() is True:
+            if self.checkStatus() is True:
                 break
             else:
                 pass
@@ -225,7 +231,7 @@ class owis:
         self.ser.write("PSET3=" + str(z) + "\r\n")                
         self.ser.write("PGO3\r\n")
         while True:
-            if self.checkPos() is True:
+            if self.checkStatus() is True:
                 break
             else:
                 pass
@@ -261,13 +267,14 @@ class owis:
 
         while True:
             cmd = raw_input("Enter command:")
+
             if cmd == "q.":
                 break            
             else:
                 self.ser.write(cmd + "\r\n")
                 answer = self.ser.readline()
                 print answer
-
+#                print bin(int(answer))        
         return True     
 
 
@@ -365,7 +372,8 @@ class owis:
 
     
     def test_drive(self, Filename):
-
+        
+        z = 400000
         path = os.getcwd()
 
         print "Start test drive according to " + Filename[1:]
@@ -373,7 +381,7 @@ class owis:
             for line in File:
                 try:
                     (x,y) = line.split()
-                    self.probe_moveAbs(int(x)*self.xSteps,int(y)*self.xSteps,400000)                
+                    self.probe_moveAbs(int(x)*self.xSteps,int(y)*self.xSteps,z)                
                 except:
                     pass
                 
@@ -381,35 +389,38 @@ class owis:
         
 
 
-# main loop
-if __name__=='__main__':
+## main loop
+#if __name__=='__main__':
 
-    start = time.time()
+#    
 
-    o = owis()
-    o.init()
+#    o = owis()
+#    o.init()
 
-#    o.readLog(os.getcwd())
+##    o.readLog(os.getcwd())
 #    o.test()
 
-#    o.check_zDrive()
-#    o.probe_moveAbs(800000,800000,400000)
+##    o.check_zDrive()
+##    o.probe_moveAbs(800000,800000,400000)
 
-#    o.moveAbsXY(50000,50000)
-#    o.ref()
-#    o.moveAbsZ()
+##    o.moveAbsXY(50000,50000)
+##    o.ref()
+##    o.moveAbsZ()
 
-    o.motorOff()
+##    o.motorOff()
 
-#    o.writeLog(os.getcwd())
+##    o.writeLog(os.getcwd())
 
-#    o.moveAbs(1000000, 1000000, 400000)
-#    o.moveAbs(750000, 750000, 400000)
+##    o.moveAbs(1000000, 1000000, 400000)
+##    o.moveAbs(750000, 750000, 400000)
 
-#    o.check_zDrive()
-#    o.test_drive("\Speedtest.txt")
+##    o.check_zDrive()
+##    o.test_drive("\Speedtest.txt")
 
-    print "Run time: " + str(time.time()-start)
+#    print "Run time: " + str(time.time()-start)
 
-
+## Stresstest mit CPUSTRESS.EXE
+## 1%   CPU Auslastung : 91,6 s 
+## 75%  CPU Auslastung : 91,7 s
+## 100% CPU Auslastung : 91,7 s
 
