@@ -6,8 +6,9 @@ import sys, os
 class owis:
 
     def __init__(self, port=None):
-
-#        self.logPath = os.getcwd()
+        
+        self.logPath = os.getcwd()
+        self.logName = "\Logfile.txt"
 
         self.xRange = 1400000     
         self.yRange = 1400000
@@ -74,12 +75,8 @@ class owis:
             else:
                 pass                 
 
-        return True
+        return self.ink_to_len(self.curPos, "um")
 
-
-    # Folgende Parameter muessen beim Initialisieren uebermittelt werden: Motortyp,
-    # Endschalter-Maske, Endschalter-Polaritaet, Achsenparameter/Regelparameter, 
-    # Strombereich der Motorendstufe. Erst dann kann gefahren werden.
 
         
 #        # set motor type (3 = Schrittmotor Closed-Loop)
@@ -117,7 +114,9 @@ class owis:
             self.ser.write("REF" + str(i) + "=4\r\n")
         
         self.checkStatus()
+        self.curPos = ["0","0","0"] 
         print "Reference run finished..."
+
 
         return True
 
@@ -129,7 +128,6 @@ class owis:
             print(self.ser.name + ' is open...')
         else:
             raise ValueError("Communication Error: Could not find device :(") 
-         
 
         return True
 
@@ -239,6 +237,18 @@ class owis:
         return True
 
 
+    def probe_moveAbs(self, x, y, z):
+        
+        # xy- needs to be seperated from z-movement for most probe station applications   
+        self.moveAbsZ(z-self.zDrive)
+        self.moveAbsXY(x,y)       
+        self.moveAbsZ(z)
+        self.curPos[str(x),str(y),str(z)]
+        print "Position reached..."
+
+        return self.curPos
+
+
     def check_zDrive(self):
 
         # get current z-position and make sure z-drive = 1mm = 50000 is possible
@@ -251,31 +261,6 @@ class owis:
 
         return True
 
-
-    def probe_moveAbs(self, x, y, z):
-        
-        # xy- needs to be seperated from z-movement for most probe station applications   
-        self.moveAbsZ(z-self.zDrive)
-        self.moveAbsXY(x,y)       
-        self.moveAbsZ(z)
-        print "Position reached..."
-
-        return True
-
-
-    def test(self):
-
-        while True:
-            cmd = raw_input("Enter command:")
-
-            if cmd == "q.":
-                break            
-            else:
-                self.ser.write(cmd + "\r\n")
-                answer = self.ser.readline()
-                print answer
-#                print bin(int(answer))        
-        return True     
 
 
     def motorOff(self):
@@ -290,6 +275,10 @@ class owis:
 
     def checkRange(self, x, y, z):
 
+        x = int(x) 
+        y = int(y) 
+        z = int(z)
+
         if x not in range(0, self.xRange+1) or y not in range(0, self.yRange+1) or z not in range(0, self.zRange+1): 
             raise ValueError("Motor Error: Destination is out of motor range!") 
         else:
@@ -298,47 +287,66 @@ class owis:
         return True     
 
 
-#    def convert_ink(self, posList, unit):
-
-#        for el in polList:
-#            el = int(el)
-#    
-#        # converts [inkrements] into [um] 
-#        if unit is "mm":
-#            posList[0] /= self.xSteps       
-#            posList[1] /= self.ySteps
-#            posList[2] /= self.zSteps
-#        elif unit is "um":
-#            posList[0] /= (self.xSteps/1000)       
-#            posList[1] /= (self.ySteps/1000)
-#            posList[2] /= (self.zSteps/1000)
-#        else:
-#            raise ValueError("Unknown unit")            
-
-#        for el in polList:
-#            el = str(el)
-
-#        return posList
 
 
-#    def convert_len_to_ink(self, val, axis):
+    def ink_to_len(self, posList, unit):
 
-#        # converts [mm] into [ink] 
-#        if axis is "x":
-#            val *= self.xSteps       
-#        elif axis is "y":    
-#            val *= self.ySteps
-#        elif axis is "z": 
-#            val *= self.zSteps
-#        else:
-#            raise ValueError("Unknown axis")
+        temp = []
+        for el in posList:
+            temp.append(int(el))
+        posList = temp
+    
+        # converts [inkrements] into [um]/[mm] 
+        if unit is "mm":
+            posList[0] /= self.xSteps       
+            posList[1] /= self.ySteps
+            posList[2] /= self.zSteps
+        elif unit is "um":
+            posList[0] /= (self.xSteps/1000)       
+            posList[1] /= (self.ySteps/1000)
+            posList[2] /= (self.zSteps/1000)
+        else:
+            raise ValueError("Unknown unit")            
 
-#        return val
+        temp = []
+        for el in posList:
+            temp.append(str(el))
+        posList = temp
+
+        return posList
 
 
-    def writeLog(self, path):
 
-        with open(path + "\Logfile.txt", "w") as File:
+    def len_to_ink(self, posList, unit):
+
+        temp = []
+        for el in posList:
+            temp.append(int(el))
+        posList = temp
+    
+        # converts [um]/[mm] to [inkrements] 
+        if unit is "mm":
+            posList[0] *= self.xSteps       
+            posList[1] *= self.ySteps
+            posList[2] *= self.zSteps
+        elif unit is "um":
+            posList[0] *= (self.xSteps/1000)       
+            posList[1] *= (self.ySteps/1000)
+            posList[2] *= (self.zSteps/1000)
+        else:
+            raise ValueError("Unknown unit")            
+
+        temp = []
+        for el in posList:
+            temp.append(str(el))
+        posList = temp
+
+        return posList
+
+
+    def writeLog(self):
+
+        with open(self.logPath + self.logName, "w") as File:
             File.write("{:>0}{:>20}{:>20}".format("x = " + self.curPos[0] , "y = " + self.curPos[1] , "z = " + self.curPos[2])) 
 
         print "Current position saved in Logfile..."
@@ -346,34 +354,34 @@ class owis:
         return True
 
 
-    def readLog(self, path):
+    def readLog(self):
 
-        cmd = raw_input("Load recent position coordinates from Logfile (y/n)? ")        
-        while cmd not in ("y","n"):   
-            cmd = raw_input("Repeat input: Load recent position coordinates from Logfile (y/n)? ")
-            if cmd in ("y","n"):
-                break
-        if cmd == "y":
-            with open(path + "\Logfile.txt", "r") as File:
-                line = File.readline().split() 
-                self.curPos.append(line[2]) 
-                self.curPos.append(line[5]) 
-                self.curPos.append(line[8])                       
+        logPos = []
 
-            for i in range(1, 4):        
-                self.ser.write("DISPCNT" + str(i) + "=" + self.curPos[i-1] + "\r\n") 
-                self.ser.write("CNT" + str(i) + "=" + self.curPos[i-1] + "\r\n") 
-                 
-            print "Recent position coordinates were sent to controler ..."                     
-            print "Current position [x, y, z]: " + str(self.curPos).replace("'","")         
-            return True        
-        else:
+        with open(self.logPath + self.logName, "r") as File:
+            line = File.readline().split() 
+            logPos.append(line[2]) 
+            logPos.append(line[5]) 
+            logPos.append(line[8])                       
+
+        if self.curPos != logPos:
             return False
+
+#        for i in range(1, 4):        
+#            self.ser.write("DISPCNT" + str(i) + "=" + self.curPos[i-1] + "\r\n") 
+#            self.ser.write("CNT" + str(i) + "=" + self.curPos[i-1] + "\r\n") 
+#                 
+#        print "Recent position coordinates were sent to controler ..."                     
+#        print "Current position [x, y, z]: " + str(self.curPos).replace("'","")  
+       
+        else:
+            return True        
+
 
     
     def test_drive(self, Filename):
         
-        z = 400000
+        z = self.curPos[2]
         path = os.getcwd()
 
         print "Start test drive according to " + Filename[1:]
@@ -386,18 +394,47 @@ class owis:
                     pass
                 
         return True        
-        
+    
+
+    def test(self):
+
+        while True:
+            cmd = raw_input("Enter command:")
+
+            if cmd == "q.":
+                break            
+            else:
+                self.ser.write(cmd + "\r\n")
+                answer = self.ser.readline()
+                print answer
+#                print bin(int(answer))        
+        return True      
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 ## main loop
 #if __name__=='__main__':
 
-#    
+
+
 
 #    o = owis()
 #    o.init()
+#    
 
-##    o.readLog(os.getcwd())
+#    o.readLog()
 #    o.test()
 
 ##    o.check_zDrive()

@@ -1,9 +1,10 @@
 import socket
-import sys
+import sys, os
 import OwisControl
 
 
 init = False
+
 
 
 # Create a TCP/IP socket
@@ -19,7 +20,6 @@ sock.bind(server_address)
 # Listen for incoming connections
 sock.listen(1)
 
-
 while True:
     # Wait for a connection / press Ctrl+Break(Pause) to abort
     print 'wait for a connection'
@@ -30,26 +30,31 @@ while True:
         while True:
             data = connection.recv(64)
             print 'received "%s"' % data
+
             # initialize motor and get current position
             if "INIT_" in data and init == False:
                 init = True
                 o = OwisControl.owis()                
-                o.init()
-                connection.sendall("1,1,1")
+                curPos = o.init()
+                connection.sendall(curPos[0] + "," + curPos[1] + "," + curPos[2])
 
             # move to position  
-            elif "MOVE_TO_" in data and init == True:
-                newPos = data[8:].split(",")
+            elif "MOVA_" in data and init == True:
+                newPos = data[5:].split(",")
                 temp = []
                 for el in newPos:
                     el = int(el.replace("'",""))
                     temp.append(el)
                 newPos = temp
 
-#                curPos = o.moveAbs(newPos[0],newPos[1],newPos[2])
+                curPos = o.moveAbs(newPos[0],newPos[1],newPos[2])
 #                connection.sendall(curPos[0] + "," + curPos[1] + "," + curPos[2])
-                o.test_drive("\Speedtest.txt")                
-                connection.sendall("6,6,6")      
+#                o.test_drive("\Speedtest.txt")                
+                connection.sendall("6,6,6")   
+            elif "STOP_" in data:
+                o.writeLog()
+                o.motorOff() 
+                connection.sendall("1,1,1")  
             else:              
                 print 'no more data from', client_address
                 break
