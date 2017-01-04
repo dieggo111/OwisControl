@@ -21,7 +21,7 @@ class owis:
         self.zDrive = 50000
         
         if port == None:
-            port = "COM4"
+            port = "COM5"
         else: 
             pass
     
@@ -38,35 +38,43 @@ class owis:
 
         self.checkCOM()
         
-        # initialize x, y, z-axis with saved default parameters 
-        for i in range(1, 4):        
-            self.ser.write("INIT" + str(i) + "\r\n")
-
         # set denominator of conversion factor for position calculation
         # default val: x = 10000 = 1mm, y = 10000 = 1mm, z = 50000 = 1mm        
 #        for i in range(1, 3):        
 #            self.ser.write("WMSFAKN" + str(i) + "=10000\r\n")
 #        self.ser.write("WMSFAKN3=50000\r\n")
+#        # set motor type (3 = Schrittmotor Closed-Loop)
+#        self.ser.write("MOTYPE3\r\n")
+#        # set current range (Strombereich) for x, y, z (0 = low)        
+#        for i in range(1, 4):        
+#            self.ser.write("AMPSHNT" + str(i) + "=0\r\n")  
+#        # set end switch mask (Endschaltermaske) for x, y, z
+#        for i in range(1, 4):        
+#            self.ser.write("SMK" + str(i) + "=0110\r\n")     
+
+        # initialize x, y, z-axis with saved default parameters 
+        for i in range(1, 4):        
+            self.ser.write("INIT" + str(i) + "\r\n")
 
         # set position format to 'absolute'
         for i in range(1, 4):        
             self.ser.write("ABSOL" + str(i) + "\r\n")
-        
-        # request current position or load recent position from logfile
+
+        return True
+
+
+    def checkInit(self):
+
+        # request current motor position and display values 
         self.curPos = []
         display_counter = []
-#        if self.readLog(os.getcwd()) is False:
-        if True:
-            for i in range(1, 4):        
-                self.ser.write("?CNT" + str(i) + "\r\n")
-                self.curPos.append(self.ser.readline().replace("\r",""))  
-                self.ser.write("?DISPCNT" + str(i) + "\r\n")                
-                display_counter.append(self.ser.readline().replace("\r",""))
+        for i in range(1, 4):   
+            self.ser.write("?CNT" + str(i) + "\r\n")
+            self.curPos.append(self.ser.readline().replace("\r",""))       
+            self.ser.write("?DISPCNT" + str(i) + "\r\n")                
+            display_counter.append(self.ser.readline().replace("\r",""))
 
-            if display_counter != self.curPos:
-                raise ValueError("Synchronization Error: Display counter and motor position are unequal.")
-            print "Current position [x, y, z]: " + str(self.curPos).replace("'","")
-        
+        # check if serial-timeout is sufficient 
         for val in self.curPos:
             if val == "":
                 raise ValueError("Communication error: Could not get proper position information in time.")
@@ -75,24 +83,21 @@ class owis:
             else:
                 pass                 
 
+        # check if display counter and motor position are equal
+        if display_counter != self.curPos:
+            raise ValueError("Synchronization Error: Display counter and motor position are unequal.")
+        # check if motor position and log position are equal
+        elif self.readLog() is False:
+            raise ValueError("Synchronization Error: Motor position and position from log file are unequal.")
+        else:
+            print "Current position [x, y, z]: " + str(self.curPos).replace("'","")
+        
         return self.ink_to_len(self.curPos, "um")
 
-
-        
-#        # set motor type (3 = Schrittmotor Closed-Loop)
-#        self.ser.write("MOTYPE3\r\n")
-#        # set current range (Strombereich) for x, y, z (0 = low)        
-#        for i in range(1, 4):        
-#            self.ser.write("AMPSHNT" + str(i) + "=0\r\n")  
-#        # set end switch mask (Endschaltermaske) for x, y, z
-#        for i in range(1, 4):        
-#            self.ser.write("SMK" + str(i) + "=0110\r\n")        
-             
        
     def getPos(self):
 
-        return self.curPos             
-
+        return self.ink_to_len(self.curPos, "um")             
 
     
     def ref(self):
@@ -100,7 +105,6 @@ class owis:
 #        # set reference mask for x, y, z      
 #        for i in range(1, 4):        
 #            self.ser.write("RMK" + str(i) + "=0001\r\n")
-
 #        # set reference polarity for x, y, z
 #        for i in range(1, 4):        
 #            self.ser.write("RPL" + str(i) + "=1111\r\n")
@@ -113,12 +117,17 @@ class owis:
         for i in range(1, 4):        
             self.ser.write("REF" + str(i) + "=4\r\n")
         
-        self.checkStatus()
+        while True:
+            if self.checkStatus() is True:
+                break
+            else:
+                pass
+
         self.curPos = ["0","0","0"] 
         print "Reference run finished..."
 
 
-        return True
+        return self.curPos
 
 
     def checkCOM(self):
@@ -176,7 +185,7 @@ class owis:
             self.curPos[i] = self.ser.readline().replace("\r","")        
         print "New position [x, y, z]: " + str(self.curPos).replace("'","")   
 
-        return self.curPos
+        return self.ink_to_len(self.curPos, "um")
 
 
     def printPos(self, posList):
@@ -220,8 +229,11 @@ class owis:
                 break
             else:
                 pass
+        
+        self.curPos[0] = newPosXY[0]
+        self.curPos[1] = newPosXY[1]
 
-        return True
+        return self.ink_to_len(self.curPos, "um") 
 
 
     def moveAbsZ(self, z):        
@@ -234,33 +246,27 @@ class owis:
             else:
                 pass
 
-        return True
+        self.curPos[2] = str(z)
+
+        return self.ink_to_len(self.curPos, "um")
 
 
     def probe_moveAbs(self, x, y, z):
+
+        # check if z-drive is possible
+        if int(z) < self.zDrive:
+            raise ValueError("Motor Error: Probe station movement is not possible without a 1000mu z-drive offset!")
+        else:
+            pass
         
         # xy- needs to be seperated from z-movement for most probe station applications   
         self.moveAbsZ(z-self.zDrive)
         self.moveAbsXY(x,y)       
         self.moveAbsZ(z)
-        self.curPos[str(x),str(y),str(z)]
+        self.curPos = [str(x),str(y),str(z)]
         print "Position reached..."
 
-        return self.curPos
-
-
-    def check_zDrive(self):
-
-        # get current z-position and make sure z-drive = 1mm = 50000 is possible
-        self.ser.write("?CNT3\r\n")
-        z = int(self.ser.readline().replace("\r",""))
-        if z < self.zDrive:
-            raise ValueError("Motor Error: Probe station movement is not possible without a 1000mu z-drive offset!")
-        else:
-            pass
-
-        return True
-
+        return self.ink_to_len(self.curPos, "um")
 
 
     def motorOff(self):
@@ -285,8 +291,6 @@ class owis:
             pass
 
         return True     
-
-
 
 
     def ink_to_len(self, posList, unit):
@@ -314,7 +318,6 @@ class owis:
         posList = temp
 
         return posList
-
 
 
     def len_to_ink(self, posList, unit):
@@ -348,7 +351,7 @@ class owis:
 
         with open(self.logPath + self.logName, "w") as File:
             File.write("{:>0}{:>20}{:>20}".format("x = " + self.curPos[0] , "y = " + self.curPos[1] , "z = " + self.curPos[2])) 
-
+        
         print "Current position saved in Logfile..."
 
         return True
@@ -424,35 +427,37 @@ class owis:
 
 
 
-## main loop
-#if __name__=='__main__':
+# main loop
+if __name__=='__main__':
 
 
 
 
-#    o = owis()
-#    o.init()
-#    
+    o = owis()
+    o.init()
+    o.checkInit()
+    
 
 #    o.readLog()
 #    o.test()
 
-##    o.check_zDrive()
-##    o.probe_moveAbs(800000,800000,400000)
+#    o.check_zDrive()
+#    o.probe_moveAbs(1000,1000,1000)
 
-##    o.moveAbsXY(50000,50000)
-##    o.ref()
+#    o.moveAbsXY(50000,50000)
+#    o.ref()
 ##    o.moveAbsZ()
 
 ##    o.motorOff()
 
-##    o.writeLog(os.getcwd())
-
 ##    o.moveAbs(1000000, 1000000, 400000)
-##    o.moveAbs(750000, 750000, 400000)
+    o.moveAbs(10000, 10000, 50000)
 
 ##    o.check_zDrive()
 ##    o.test_drive("\Speedtest.txt")
+
+    o.writeLog()
+
 
 #    print "Run time: " + str(time.time()-start)
 

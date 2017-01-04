@@ -35,22 +35,35 @@ while True:
             if "INIT_" in data and init == False:
                 init = True
                 o = OwisControl.owis()                
-                curPos = o.init()
+                o.init()
+                curPos = o.checkInit()                
                 connection.sendall(curPos[0] + "," + curPos[1] + "," + curPos[2])
 
-            # move to position  
+            # perform reference run
+            if "REFR_" in data and init == True:
+                o.ref() 
+                o.writeLog()
+                connection.sendall("0,0,0")
+
+            # move to absolute position  
             elif "MOVA_" in data and init == True:
                 newPos = data[5:].split(",")
-                temp = []
-                for el in newPos:
-                    el = int(el.replace("'",""))
-                    temp.append(el)
-                newPos = temp
-
+                o.checkRange(newPos[0],newPos[1],newPos[2])
                 curPos = o.moveAbs(newPos[0],newPos[1],newPos[2])
-#                connection.sendall(curPos[0] + "," + curPos[1] + "," + curPos[2])
+                o.writeLog()
+                connection.sendall(curPos[0] + "," + curPos[1] + "," + curPos[2])
+
 #                o.test_drive("\Speedtest.txt")                
-                connection.sendall("6,6,6")   
+#                connection.sendall("6,6,6") 
+
+            # probe station movement with z-drive
+            elif "MOVP_" in data and init == True:
+                newPos = data[5:].split(",")
+                o.check_zDrive()                
+                o.checkRange(newPos[0],newPos[1],newPos[2])
+                o.probe_moveAbs(newPos[0],newPos[1],newPos[2])
+                
+            # turn off motor and write position to log file            
             elif "STOP_" in data:
                 o.writeLog()
                 o.motorOff() 
