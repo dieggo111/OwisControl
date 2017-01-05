@@ -48,7 +48,8 @@ while True:
             # move to absolute position  
             elif "MOVA_" in data and init == True:
                 newPos = data[5:].split(",")
-                o.checkRange(newPos[0],newPos[1],newPos[2])
+                newPos = o.len_to_ink(newPos, "um")
+                o.checkRange(newPos[0],newPos[1],newPos[2],"Abs")
                 curPos = o.moveAbs(newPos[0],newPos[1],newPos[2])
                 o.writeLog()
                 connection.sendall(curPos[0] + "," + curPos[1] + "," + curPos[2])
@@ -56,13 +57,27 @@ while True:
 #                o.test_drive("\Speedtest.txt")                
 #                connection.sendall("6,6,6") 
 
-            # probe station movement with z-drive
-            elif "MOVP_" in data and init == True:
-                newPos = data[5:].split(",")
-                o.check_zDrive()                
-                o.checkRange(newPos[0],newPos[1],newPos[2])
+            elif "MOVR_" in data and init == True:
+                newPos = data[5:].split(",")              
+                newPos = o.len_to_ink(newPos, "um")                
+                o.checkRange(newPos[0],newPos[1],newPos[2],"Rel")
+                curPos = o.moveRel(newPos[0],newPos[1],newPos[2])
+                o.writeLog()
+                connection.sendall(curPos[0] + "," + curPos[1] + "," + curPos[2])
+
+            # absolute probe station movement with z-drive
+            elif "MOPA_" in data and init == True:
+                newPos = data[5:].split(",")              
+                o.checkRange(newPos[0],newPos[1],newPos[2],"Abs")
                 o.probe_moveAbs(newPos[0],newPos[1],newPos[2])
-                
+
+                            
+            elif "MOPR_" in data and init == True:
+                newPos = data[5:].split(",")              
+                o.checkRange(newPos[0],newPos[1],newPos[2],"Abs")
+                o.probe_moveAbs(newPos[0],newPos[1],newPos[2])
+
+
             # turn off motor and write position to log file            
             elif "STOP_" in data:
                 o.writeLog()
