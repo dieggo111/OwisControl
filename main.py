@@ -1,17 +1,19 @@
 import socket
 import sys, os
 import OwisControl
+import OwisError
 
 
 init = False
-
+server_name = "localhost"
+port = 10000
 
 
 # Create a TCP/IP socket
 sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
 # Bind the socket to the port
-server_address = ('localhost', 10000)
+server_address = (server_name, port)
 print 'starting up on %s port %s' % server_address
 
 # Bind socket sock with the server adress local host with port 10000
@@ -33,10 +35,11 @@ while True:
 
             # initialize motor and get current position
             if "INIT_" in data and init == False:
-                init = True
-                o = OwisControl.owis()                
+                o = OwisControl.owis() 
                 o.init()
-                curPos = o.checkInit()                
+                o.checkInit()
+                init = True
+                curPos = o.getPos()                
                 connection.sendall(curPos[0] + "," + curPos[1] + "," + curPos[2])
 
             # perform reference run
@@ -50,7 +53,8 @@ while True:
                 newPos = data[5:].split(",")
                 newPos = o.len_to_ink(newPos, "um")
                 o.checkRange(newPos[0],newPos[1],newPos[2],"Abs")
-                curPos = o.moveAbs(newPos[0],newPos[1],newPos[2])
+                o.moveAbs(newPos[0],newPos[1],newPos[2])
+                curPos = o.getPos()    
                 o.writeLog()
                 connection.sendall(curPos[0] + "," + curPos[1] + "," + curPos[2])
 
@@ -60,32 +64,47 @@ while True:
             elif "MOVR_" in data and init == True:
                 newPos = data[5:].split(",")              
                 newPos = o.len_to_ink(newPos, "um")                
-                o.checkRange(newPos[0],newPos[1],newPos[2],"Rel")
-                curPos = o.moveRel(newPos[0],newPos[1],newPos[2])
+                o.checkRange(newPos[0],newPos[1],newPos[2],"Rel")                    
+                o.moveRel(newPos[0],newPos[1],newPos[2])
+                curPos = o.getPos()                    
                 o.writeLog()
                 connection.sendall(curPos[0] + "," + curPos[1] + "," + curPos[2])
 
             # absolute probe station movement with z-drive
             elif "MOPA_" in data and init == True:
                 newPos = data[5:].split(",")              
-                o.checkRange(newPos[0],newPos[1],newPos[2],"Abs")
+                o.checkRange(newPos[0],newPos[1],newPos[2],"Abs")                    
                 o.probe_moveAbs(newPos[0],newPos[1],newPos[2])
+                curPos = o.getPos()                    
+                o.writeLog()
+                connection.sendall(curPos[0] + "," + curPos[1] + "," + curPos[2])
 
                             
             elif "MOPR_" in data and init == True:
                 newPos = data[5:].split(",")              
-                o.checkRange(newPos[0],newPos[1],newPos[2],"Abs")
+                o.checkRange(newPos[0],newPos[1],newPos[2],"Abs")                    
                 o.probe_moveAbs(newPos[0],newPos[1],newPos[2])
-
+                curPos = o.getPos()                    
+                o.writeLog()
+                connection.sendall(curPos[0] + "," + curPos[1] + "," + curPos[2])
 
             # turn off motor and write position to log file            
-            elif "STOP_" in data:
+            elif "STOP" in data:
                 o.writeLog()
                 o.motorOff() 
                 connection.sendall("1,1,1")  
             else:              
                 print 'no more data from', client_address
                 break
+
+    except OwisError.ComError:
+        connection.sendall("6,6,6")
+
+    except OwisError.SynchError:
+        connection.sendall("6,6,6")
+
+    except OwisError.MotorError:
+        connection.sendall("6,6,6")
 
     finally:
         # Clean up the connection
