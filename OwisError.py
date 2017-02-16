@@ -3,17 +3,17 @@ class OwisError(Exception):
 
 class ComError(OwisError):
     def __init__(self, message):
-        print message
+        print(message)
     
 
 class MotorError(OwisError):
     def __init__(self, message):
-        print message
+        print(message)
 
 
 class SynchError(OwisError):
     def __init__(self, message):
-        print message
+        print(message)
 
 
 
