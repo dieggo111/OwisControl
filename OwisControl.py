@@ -15,6 +15,7 @@ class owis:
         if model is "PS35":
             self.model = "PS35"
             self.logPath = os.getcwd()
+            # back slash for windows :(
             self.logName = "\Logfile.txt"
 
             self.xRange = 1400000
@@ -36,7 +37,8 @@ class owis:
         if model is "PS10":
             self.model = "PS10"
             self.logPath = os.getcwd()
-            self.logName = "\Logfile.txt"
+            # front slash for linux :)
+            self.logName = "/Logfile.txt"
             self.serial_nr = ["08070255","08070256","08070257"]
             self.serList = []
 
@@ -224,10 +226,20 @@ class owis:
                 if val == "":
                     raise OwisError.ComError("Could not get proper position information in time!")
             # check if current position is in the expected range
-#                elif val != None and int(val) < 0:
-#                    raise OwisError.SynchError("Unexpected axis positions. Motor needs to be   calibrated!")
+                elif val != None and int(val) < 0:
+                    raise OwisError.SynchError("Unexpected axis positions. Motor needs to be calibrated!")
                 else:
                     pass
+            
+            # create logfile if it isn't there
+            if os.path.isfile(self.logPath + self.logName) is False:
+                self.writeLog()
+                print("Created new Logfile...")
+            # check if motor position and log position are equal
+            elif self.readLog() is False:
+                raise OwisError.SynchError("Motor position and position from log file are unequal!")
+            else:
+                pass
 
             print("Current position [x, y, z]: " + str(self.curPos).replace("'",""))
 
@@ -714,7 +726,7 @@ class owis:
     def writeLog(self):
 
         with open(self.logPath + self.logName, "w") as File:
-            File.write(b"{:>0}{:>20}{:>20}".format("x = " + self.curPos[0] , "y = " + self.curPos[1] , "z = " + self.curPos[2])) 
+            File.write("{:>0}{:>20}{:>20}".format("x = " + self.curPos[0] , "y = " + self.curPos[1] , "z = " + self.curPos[2])) 
         
         print("Current position saved in Logfile...")
 
@@ -726,7 +738,7 @@ class owis:
         logPos = []
 
         with open(self.logPath + self.logName, "r") as File:
-            line = File.readline().decode("utf-8").split() 
+            line = File.readline().split() 
             logPos.append(line[2]) 
             logPos.append(line[5]) 
             logPos.append(line[8])                       
@@ -740,7 +752,7 @@ class owis:
 #                 
 #        print("Recent position coordinates were sent to controler ...")
 #        print("Current position [x, y, z]: " + str(self.curPos).replace("'",""))
-       
+
         else:
             return True        
 
@@ -902,10 +914,10 @@ if __name__=='__main__':
     o = owis("PS10", port1="/dev/ttyACM0", port2="/dev/ttyACM1", port3="/dev/ttyACM2")
     o.init()
     o.checkInit()
-
-    o.PS10_moveAbs(300000,300000,30000)
+    
+#    o.PS10_moveAbs(300000,300000,30000)
 #    o.ref()
-#    o.PS10_moveRel(0,0,1000)
+    o.PS10_moveRel(-20000,0,0)
 #    o.moveRel(50000,0,0)
 
 #    o.readLog()
@@ -926,7 +938,7 @@ if __name__=='__main__':
 ##    o.check_zDrive()
 ##    o.test_drive("\Speedtest.txt")
 
-#    o.writeLog()
+    o.writeLog()
 
 
 #    print("Run time: " + str(time.time()-start))
