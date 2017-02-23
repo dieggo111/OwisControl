@@ -817,6 +817,37 @@ class owis:
 
         return True
 
+
+    def PS10_moveAbs(self, x, y, z):
+
+        # check if request is within boundaries       
+        self.checkRange(x, y, z, "Abs")
+        
+        newPos = [str(x), str(y), str(z)]
+
+        # send new destination to controller and start motor movement
+        for i, val in enumerate(newPos):
+            if val is not None:
+                self.serList[i].write(bytes("PSET1=" + newPos[i] + "\r\n","utf-8"))
+                self.serList[i].write(b"PGO1\r\n")
+            else:
+                pass
+
+        print("Moving to new position...")
+
+        # status request: check and print current position until destination is reached
+        self.printPos(newPos)
+
+        # print final destination 
+        for i, val in enumerate(newPos):        
+            if val is not None:
+                self.serList[i].write(b"?CNT1\r\n")
+                self.curPos[i] = self.serList[i].readline().decode("utf-8").replace("\r","")
+            else:
+                pass
+
+        return True
+
 ################
 # test methods #
 ################
@@ -872,7 +903,7 @@ if __name__=='__main__':
     o.init()
     o.checkInit()
 
-#    o.PS10_moveRel(100000,200000,60000)
+    o.PS10_moveAbs(300000,300000,30000)
 #    o.ref()
 #    o.PS10_moveRel(0,0,1000)
 #    o.moveRel(50000,0,0)
@@ -887,7 +918,7 @@ if __name__=='__main__':
 #    o.ref()
 ##    o.moveAbsZ()
 
-    o.motorOff()
+#    o.motorOff()
 
 #    o.moveAbs(1000000, 1000000, 400000)
 #    o.moveAbs(10000, 10000, 100000)
