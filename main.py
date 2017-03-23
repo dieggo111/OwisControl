@@ -1,11 +1,13 @@
 import socket
 import sys, os
-import OwisControl
+import OwisControl_PS10
 import OwisError
 
 server_name = "localhost"
 port = 10000
 init_done = False
+comList = ["INIT", "REFDRIVE", "GETPOS", "GETSTAT", "STOP",
+           "MOVR_", "MOPR_", "MOVA_", "MOPA_"]
 
 # Create a TCP/IP socket
 sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -31,115 +33,128 @@ try:
         print('Waiting for a client connection...')
         connection, client_address = sock.accept()
 
+
+        # Receive the data in small chunks and retransmit it
         try:
-            # Receive the data in small chunks and retransmit it
+            # data = connection.recv(64)
             while True:
-                try:
-                    data = connection.recv(64)
+                data = connection.recv(64)
 
-                    print('Received "%s" from %s' %(data.decode("utf-8"),
-                          client_address))
+                if data.decode("utf-8") == "":
+                    pass
+                else:
+                    print('Received "%s" from %s'
+                          %(data.decode("utf-8"), client_address))
 
-                    # initialize motor and get current position
-                    if "INIT" in data.decode("utf-8") and init_done == False:
-                        #TODO: Controller type and port names need to be variable
-                        o = OwisControl-PS10.owis("/dev/ttyACM0",
-                                                  "/dev/ttyACM1",
-                                                  "/dev/ttyACM2")
-                        o.init()
-                        o.checkInit()
-                        curPos = o.getPos("str")
-                        connection.sendall(bytes("OK_" + curPos, "utf-8"))
-                        init_done = True
-                        break
-                    # if motor was already initialized...
-                    elif "INIT" in data.decode("utf-8") and init_done == True:
-                        curPos = o.getPos("str")
-                        connection.sendall(bytes("OK_" + curPos, "utf-8"))
+                # initialize motor and get current position
+                if "INIT" in data.decode("utf-8") and init_done == False:
+                    #TODO: Controller type and port names need to be variable
+                    o = OwisControl_PS10.owis("/dev/ttyACM0",
+                                              "/dev/ttyACM1",
+                                              "/dev/ttyACM2")
+                    o.init()
+                    o.checkInit()
+                    curPos = o.getPos("str")
+                    connection.sendall(bytes("OK_" + curPos, "utf-8"))
+                    init_done = True
 
-                    # perform reference run
-                    elif "REFDRIVE" in data.decode("utf-8") and init_done == True:
-                        o.ref()
-                        o.writeLog()
-                        curPos = o.getPos("str")
-                        connection.sendall(bytes("OK_" + curPos, "utf-8"))
+                # if motor was already initialized...
+                elif "INIT" in data.decode("utf-8") and init_done == True:
+                    curPos = o.getPos("str")
+                    connection.sendall(bytes("OK_" + curPos, "utf-8"))
 
-                    # move to absolute position
-                    elif "MOVA_" in data.decode("utf-8"):
-                        newPos = data[5:].decode("utf-8").split(",")
-                        o.MOVA(newPos[0],newPos[1],newPos[2])
-                        o.writeLog()
-                        curPos = o.getPos("str")
-                        connection.sendall(bytes("OK_" + curPos, "utf-8"))
+                # perform reference run
+                elif "REFDRIVE" in data.decode("utf-8") and init_done == True:
+                    o.REFDRIVE()
+                    curPos = o.getPos("str")
+                    connection.sendall(bytes("OK_" + curPos, "utf-8"))
 
-                    # move to relative position
-                    elif "MOVR_" in data.decode("utf-8"):
-                        newPos = data[5:].decode("utf-8").split(",")
-                        o.MOVR(newPos[0],newPos[1],newPos[2])
-                        curPos = o.getPos("str")
-                        o.writeLog()
-                        connection.sendall(bytes("OK_" + curPos, "utf-8"))
+                # move to absolute position
+                elif "MOVA_" in data.decode("utf-8") and init_done == True:
+                    newPos = data[5:].decode("utf-8").split(",")
+                    print(newPos)
+                    o.MOVA(newPos[0],newPos[1],newPos[2])
+                    curPos = o.getPos("str")
+                    connection.sendall(bytes("OK_" + curPos, "utf-8"))
 
-                    # absolute probe station movement (including z-drive)
-                    elif "MOPA_" in data.decode("utf-8"):
-                        newPos = data[5:].decode("utf-8").split(",")
-                        o.MOPA(newPos[0],newPos[1],newPos[2])
-                        curPos = o.getPos("str")
-                        o.writeLog()
-                        connection.sendall(bytes("OK_" + curPos, "utf-8"))
+                # move to relative position
+                elif "MOVR_" in data.decode("utf-8") and init_done == True:
+                    newPos = data[5:].decode("utf-8").split(",")
+                    o.MOVR(newPos[0],newPos[1],newPos[2])
+                    curPos = o.getPos("str")
+                    connection.sendall(bytes("OK_" + curPos, "utf-8"))
 
-                    # relative probe station movement (including z-drive)
-                    elif "MOPR_" in data.decode("utf-8"):
-                        newPos = data[5:].decode("utf-8").split(",")
-                        o.MOPR(newPos[0],newPos[1],newPos[2])
-                        curPos = o.getPos("str")
-                        o.writeLog()
-                        connection.sendall(bytes("OK_" + curPos, "utf-8"))
+                # absolute probe station movement (including z-drive)
+                elif "MOPA_" in data.decode("utf-8") and init_done == True:
+                    newPos = data[5:].decode("utf-8").split(",")
+                    o.MOPA(newPos[0],newPos[1],newPos[2])
+                    curPos = o.getPos("str")
+                    connection.sendall(bytes("OK_" + curPos, "utf-8"))
 
-                   # turn off motor and write position to log file
-                   elif "STOP" in data.decode("utf-8"):
-                       o.motorOff()
-                       curPos = o.getPos("str")
-                       o.writeLog()
-                       connection.sendall(bytes("OK_" + curPos, "utf-8"))
+                # relative probe station movement (including z-drive)
+                elif "MOPR_" in data.decode("utf-8") and init_done == True:
+                    newPos = data[5:].decode("utf-8").split(",")
+                    o.MOPR(newPos[0],newPos[1],newPos[2])
+                    curPos = o.getPos("str")
+                    connection.sendall(bytes("OK_" + curPos, "utf-8"))
 
-                    elif "GETPOS" in data.decode("utf-8"):
-                        curPos = o.getPos("str")
-                        connection.sendall(bytes("OK_" + curPos, "utf-8"))
+                # turn off motor and write position to log file
+                elif "STOP" in data.decode("utf-8"):
+                    curPos = o.getPos("str")
+                    o.writeLog()
+                    connection.sendall(bytes("OK_" + curPos, "utf-8"))
+                    break
 
-                    elif "GETSTAT" in data.decode("utf-8"):
-                        status = o.getStatus()
-                        connection.sendall(bytes("ST_" + status, "utf-8"))
+                # returns current position
+                elif "GETPOS" in data.decode("utf-8") and init_done == True:
+                    curPos = o.getPos("str")
+                    connection.sendall(bytes("OK_" + curPos, "utf-8"))
 
-                    else:
-                        print ('No more data from %s' %str(client_address[0]))
-                        break
+                # returns current status
+                elif "GETSTAT" in data.decode("utf-8") and init_done == True:
+                    status = o.getStatus()
+                    connection.sendall(bytes("ST_" + status, "utf-8"))
 
+                # intercept invalid commands
+                elif data.decode("utf-8") not in comList and data.decode("utf-8") != "":
+                    connection.sendall(bytes("ER_666", "utf-8"))
+
+
+                else:
+                    print ('No more data from %s' %str(client_address[0]))
+                    break
 
         except OwisError.ComError:
-            connection.sendall(bytes("ER,123", "utf-8"))
+            connection.sendall(bytes("ER_123", "utf-8"))
 
         except OwisError.SynchError:
-            connection.sendall(bytes("ER,124", "utf-8"))
+            connection.sendall(bytes("ER_124", "utf-8"))
 
         except OwisError.MotorError:
-            connection.sendall(bytes("ER,125", "utf-8"))
+            connection.sendall(bytes("ER_125", "utf-8"))
 
         finally:
-            # turn off motor and write position to log file
-            o.writeLog()
-            o.motorOff()
-            connection.sendall(bytes("OK,-1,-1,-1", "utf-8"))
-            # Clean up the connection
+            # close socket
             connection.close()
+
+    # turn off motor and write position to log file
+    if init_done == True:
+        o.writeLog()
+        o.motorOff()
+    else:
+        pass
+
 
 # Catch the Ctrl-C event
 except(KeyboardInterrupt):
     print()
     print("Server manually stopped by pressing Ctrl-C. Shutting down...")
     # turn off motor and write position to log file
-    o.writeLog()
-    o.motorOff()
-    connection.sendall(bytes("OK,-1,-1,-1", "utf-8"))
-    # Clean up the connection
+    if init_done == True:
+        o.writeLog()
+        o.motorOff()
+    else:
+        pass
+
+    # close socket
     connection.close()
