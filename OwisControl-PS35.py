@@ -11,8 +11,6 @@ class owis:
     def __init__(self, port1=None, port2=None, port3=None):
 
 
-
-        self.model = "PS35"
         self.logPath = os.getcwd()
         # back slash for windows :(
         self.logName = "\Logfile.txt"
@@ -32,7 +30,6 @@ class owis:
         else:
             self.port1 = port1
 
-
         # default parameters for serial port
         self.baudrate = 9600
         self.bytesize = 8
@@ -41,16 +38,13 @@ class owis:
 
     def init(self):
 
-
         try:
             self.ser = serial.Serial(port=self.port1,
-                            baudrate=self.baudrate,
-                            bytesize=self.bytesize,
-                            timeout=self.timeout)
+                                     baudrate=self.baudrate,
+                                     bytesize=self.bytesize,
+                                     timeout=self.timeout)
 
             print("Initializing...")
-
-# (*1)
 
             # initialize x, y, z-axis with saved default parameters
             for i in range(1, 4):
@@ -65,10 +59,6 @@ class owis:
             for i in range(1, 4):
                 self.ser.write(b"TERM=0\r\n")
                 self.ser.readline().decode("utf-8")
-
-            # set position format to 'absolute'
-            for i in range(1, 4):
-                self.ser.write(bytes("ABSOL" + str(i) + "\r\n"), "utf-8")
 
             # set position format to 'absolute'
             for i in range(1, 4):
@@ -94,40 +84,39 @@ class owis:
             self.ser.write(bytes("?DISPCNT" + str(i) + "\r\n"), "utf-8")
             display_counter.append(self.ser.readline().decode("utf-8").replace("\r",""))
 
-        # check if serial-timeout is sufficient
         for val in self.curPos:
+            # check if serial-timeout is sufficient
             if val == "":
                 raise OwisError.ComError("Could not get proper position information in time!")
-        # check if current position is in the expected range
+            # check if current position is in the expected range
             elif val != None and int(val) < 0:
-                raise OwisError.SynchError("Unexpected axis positions. Motor needs to be calibrated!")
+                print("Warning: Unexpected axis positions. Motor needs to be calibrated!")
+                # raise OwisError.SynchError("Unexpected axis positions. Motor needs to be calibrated!")
             else:
                 pass
 
         # check if display counter and motor position are equal
         if display_counter != self.curPos:
-            raise OwisError.SynchError("Display counter and motor position are unequal!")
-        # check if motor position and log position are equal
-        elif self.readLog() is False:
-            raise OwisError.SynchError("Motor position and position from log file are unequal!")
-        else:
-            print("Current position [x, y, z]: " + str(self.curPos).replace("'",""))
+            # raise OwisError.SynchError("Display counter and motor position are unequal!")
+            print("Warning: Display counter and motor position are unequal.")
 
-
-        # # create logfile if it isn't there
-        # if os.path.isfile(self.logPath + self.logName) is False:
-        #     self.writeLog()
-        #     print("Created new Logfile...")
-        # # check if motor position and log position are equal
-        # elif self.readLog() is False:
-        #     raise OwisError.SynchError("Motor position and position from log file are unequal!")
-        # else:
-        #     pass
-
-        print("Current position in (ink) [x, y, z]: " + str(self.curPos).replace("'",""))
-        print("Current position in (um) [x, y, z]: [" + self.getPos("str") + "]")
+        print("Current position in (um) [x, y, z]: [" \
+              + self.getPos("str") + "]")
 
         return True
+
+
+    def checkLog(self):
+
+        # create logfile if it isn't there
+        if os.path.isfile(self.logPath + self.logName) is False:
+            self.writeLog()
+            print("Created new Logfile...")
+        # check if motor position and log position are equal
+        elif self.readLog() is False:
+            print("Warning: Display counter and motor position are unequal.")
+        else:
+            return True
 
 
     def checkStatus(self):
@@ -136,51 +125,39 @@ class owis:
             self.ser.write(b"?ASTAT" + "\r\n")
             status = self.ser.readline().decode("utf-8").replace("\r","")
 
-            if "T" not in status:
+            self.printAll(status)
+
+            if status == ["R", "R", "R"]:
                 return True
                 break
             else:
-                pass
+                return False
 
 
-    def checkRange(self, x, y, z, mode):
+    def checkRange(self, x, y, z):
+        """ Checks if new position is within the accepted range according to
+        the 'self.(x,y,z)Range' values. Only absolute values can be checked.
+        Method expects arguments to be in [um].
 
-        x = int(x)
-        y = int(y)
-        z = int(z)
+        """
 
         checkList = [int(x),int(y),int(z)]
         rangeList = [self.xRange,self.yRange,self.zRange]
 
-        if mode == "Abs":
-            if x not in range(0, self.xRange+1) or y not in range(0, self.yRange+1) or z not in range(0, self.zRange+1):
-                raise OwisError.MotorError("Destination is out of motor range!")
-            else:
-                pass
-
-        elif mode == "Rel":
-            for i, val in enumerate(self.curPos):
-                if val is not None:
-                    if int(val)+checkList[i] not in range(0, rangeList[i]+1):
-                        raise OwisError.MotorError("Destination is out of motor range!")
-                    else:
-                        pass
-                else:
-                    pass
-
-#            if (int(self.curPos[0])+x) not in range(0, self.xRange+1) or(int(self.curPos[1])+y) not in range(0, self.yRange+1) or (int(self.curPos[2])+z) not in range(0, self.zRange+1):
-#                raise OwisError.MotorError("Destination is out of motor range!")
-#            else:
-#                pass
+        if (x not in range(0, self.xRange+1))\
+        or (y not in range(0, self.yRange+1))\
+        or (z not in range(0, self.zRange+1)):
+            raise OwisError.MotorError("Destination is out of motor range!")
         else:
-            raise ValueError("Unknown movement mode! Try 'Abs' or 'Rel'.")
+            pass
 
         return True
 
 
     def getPos(self, mode = None):
-        """ Returns a string of a list of strings (x,y,z) of the current
-        position.
+        """ Returns a string that contains the current axis positions (x,y,z)
+        in [um]. The ink values of 'self.curPos'are preserved. The 'mode'
+        argument is used the return a formated string.
 
         """
 
@@ -192,20 +169,176 @@ class owis:
 
 
 
-    def printPos(self, posList):
+    def getStatus(self):
+        """ Returns current axis status.
 
-        # read-out temp position until requested position is reached
+        """
 
-        while True:
-            tempPos = []
-            for i, val in enumerate(posList):
-                self.ser.write(bytes("?CNT" + str(i+1) + "\r\n"), "utf-8")
-                tempPos.append(self.ser.readline().decode("utf-8").replace("\r",""))
-            if tempPos != posList:
-                print(tempPos)
+        status = []
+
+        for i in range(1, 4):
+            self.ser.write(b"?ASTAT\r\n")
+            status.append(self.ser.readline().decode("utf-8").replace("\r",""))
+
+        status = str(status).replace("[","").replace("]","").replace("'","").replace(" ","")
+
+        return status
+
+
+    def printAll(self, status):
+        """ Prints current axis status and current position.
+
+        """
+
+        tempPos = [None,None,None]
+
+        for i in range(1, 4):
+            self.ser.write(bytes("?CNT" + str(i) + "\r\n", "utf-8"))
+            tempPos[i-1] = self.ser.readline().decode("utf-8").replace("\r","")
+
+        print("status = " + str(status) + " ; position = " + str(self.ink_to_len(tempPos)))
+
+        return True
+
+
+    def freeMotor(self):
+
+        status = [None,None,None]
+
+        for i in range(1, 4):
+            if self.ser is not None:
+                self.ser.write(b"?ASTAT\r\n")
+                status[i-1] = self.ser.readline().decode("utf-8").replace("\r","")
             else:
-                print("Position reached...")
+                pass
+
+        for i in range(1, 4):
+            self.ser.write(bytes("INIT"+ str(i) + "\r\n", "utf-8"))
+            time.sleep(2)
+            self.ser.write(bytes("EFREE"+ str(i) + "\r\n", "utf-8"))
+
+        return True
+
+
+#######################
+# PS 35 motor methods #
+#######################
+
+
+    def MOVA(self, x, y, z):
+        """ Sends new position to controller and starts the movement. Position
+        is written into logfile if run is succesfull.
+        (x,y,z) arguments are considered as [um]. It is important to note
+        that the controller expects [inkrement] values!
+
+        Args:
+        x,y,z : int or str (value in [um])
+
+        """
+
+        # convert [um] values into [ink]
+        newPos = self.len_to_ink([x,y,z])
+
+        # check if request is within boundaries
+        self.checkRange(x, y, z)
+
+        # send new destination to controller and start motor movement
+        for i, val in enumerate(newPos):
+            self.ser.write(bytes("PSET" + str(i+1) + "=" + newPos[i] + "\r\n"), "utf-8")
+            self.ser.write(bytes("PGO" + str(i+1) + "\r\n"), "utf-8")
+
+        print("Moving to new position...")
+
+        # status request: check current position and status until destination is reached
+        while True:
+            if self.checkStatus() == True:
                 break
+            else:
+                pass
+
+        # read-out final position
+        for i, val in enumerate(newPos):
+            self.ser.write(bytes("?CNT" + str(i+1) + "\r\n"), "utf-8")
+            self.curPos[i] = self.ser.readline().decode("utf-8").replace("\r","")
+
+        # check if desired position was reached, print, update logfile
+        if newPos != self.curPos:
+            raise ValueError("Couldn't reach desired destination. Run failed...")
+        else:
+            print("New position [x, y, z]: " + str(self.ink_to_len(self.curPos)).replace("'",""))
+            o.writeLog()
+
+        return True
+
+
+    def MOVR(self, x, y, z):
+
+        """ New position is calculated according to the relative values given.
+        Sends new position to controller and starts the movement. Position
+        is written into logfile if run is succesfull.
+        (x,y,z) arguments are considered as [um]. It is important to note
+        that the controller expects [inkrement] values!
+
+        Args:
+        x,y,z : int or str (value in [um])
+
+        """
+
+        # convert relative into absolute positions
+        newPos = [None,None,None]
+        tempList = [int(x),int(y),int(z)]
+        for i, val in enumerate(self.curPos):
+            if val is not None:
+                newPos[i] = str(int(self.curPos[i]) + tempList[i])
+            else:
+                pass
+        print(newPos)
+        # from here on it is basically an absolute movement
+        self.MOVA(newPos[0],newPos[1],newPos[2])
+
+        return True
+
+
+    def REFDRIVE(self, mode=None):
+
+        # set reference mask for x, y, z
+        for i in range(1, 4):
+            # 1 = 0001 = MINSTOP
+            # 2 = 0010 = MINDEC
+            self.ser.write(bytes("RMK" + str(i) + "=1\r\n"), "utf-8")
+
+        # set reference run velocity for x, y, z (std val = 41943)
+        for i in range(1, 4):
+            self.ser.write(bytes("RVELS" + str(i) + "=10000\r\n"), "utf-8")
+
+        # set reference mode and start reference run for x, y, z
+        if mode is not None:
+            for i in range(1, 4):
+                self.ser.write(bytes("REF" + str(i) + "=" + str(mode) + "\r\n", "utf-8"))
+        else:
+            for i in range(1, 4):
+                self.ser.write(bytes("REF" + str(i) + "=4\r\n", "utf-8"))
+
+        # status request: check current position and status until destination is reached
+        while True:
+            if self.checkStatus() == True:
+                break
+            else:
+                pass
+
+        print("Reference run finished...")
+
+        # read-out final position
+        for i in range(1, 4):
+            self.ser.write(bytes("?CNT" + str(i) + "\r\n"), "utf-8")
+            self.curPos[i] = self.ser.readline().decode("utf-8").replace("\r","")
+
+        # check if desired position was reached, print, update logfile
+        if self.curPos != ["0","0","0"]:
+            raise ValueError("Couldn't reach desired destination. Run failed...")
+        else:
+            print("New position [x, y, z]: " + str(self.ink_to_len(self.curPos)).replace("'",""))
+            o.writeLog()
 
         return True
 
@@ -214,96 +347,14 @@ class owis:
 
         # turn x, y, z-motor off
         for i in range(1, 4):
-            self.ser.write(bytes("MOFF" + str(i) + "\r\n"), "utf-8")
+            self.ser.write(bytes("MOFF" + str(i) + "\r\n"), "utf-8"))
 
         print("Motors are off...")
 
         return True
 
-
-############################
-# absolut movement methods #
-############################
-
-
-    def ref(self):
-
-        # set reference mask for x, y, z
-        for i in range(1, 4):
-            self.ser.write(bytes("RMK" + str(i) + "=0001\r\n"), "utf-8")
-
-
-#        # set reference polarity for x, y, z
-        # for i in range(1, 4):
-        #     if self.model is "PS10":
-        #         if self.serList[i-1] is not None:
-        #             self.serList[i-1].write(b"RPL1=1111\r\n")
-        #         else:
-        #             pass
-        #     else:
-        #         pass
-#        for i in range(1, 4):
-#            self.ser.write(b"RPL" + str(i) + "=1111\r\n")
-
-        # set reference run velocity for x, y, z (std val = 41943)
-        for i in range(1, 4):
-            self.ser.write(bytes("RVELS" + str(i) + "=10000\r\n"), "utf-8")
-
-
-        # set reference mode and start reference run for x, y, z
-        for i in range(1, 4):
-            self.ser.write(b"REF" + str(i) + "=4\r\n")
-
-
-
-        while True:
-            self.ser.write(b"?ASTAT\r\n")
-            status = self.ser.readline().decode("utf-8").replace("\r","")
-
-            if "P" not in status:
-                break
-            else:
-                pass
-
-        # print final destination
-        print("Reference run finished...")
-        for i in range(1, 4):
-            self.ser.write(bytes("?CNT" + str(i+1) + "\r\n"), "utf-8")
-            self.curPos[i] = self.ser.readline().decode("utf-8").replace("\r","")
-
-        print("New position [x, y, z]: " + str(self.curPos).replace("'",""))
-
-
-        return True
-
-
-    def moveAbs(self, x, y, z):
-
-        # check if request is within boundaries
-        self.checkRange(x, y, z, "Abs")
-
-        newPos = [str(x), str(y), str(z)]
-
-        # send new destination to controller and start motor movement
-        for i, val in enumerate(newPos):
-            self.ser.write(bytes("PSET" + str(i+1) + "=" + newPos[i] + "\r\n"), "utf-8")
-            self.ser.write(bytes("PGO" + str(i+1) + "\r\n"), "utf-8")
-        print("Moving to new position...")
-
-        # status request: check and print current position until destination is reached
-        self.printPos(newPos)
-
-        # print final destination
-        for i, val in enumerate(newPos):
-            self.ser.write(bytes("?CNT" + str(i+1) + "\r\n"), "utf-8")
-            self.curPos[i] = self.ser.readline().decode("utf-8").replace("\r","")
-        print("New position [x, y, z]: " + str(self.curPos).replace("'",""))
-
-        return True
-
-
-
-    def moveAbsXY(self, x, y):
+##obsolet???
+    def MOVA_XY(self, x, y):
 
         newPosXY = [str(x),str(y)]
         for i in range(1,3):
@@ -323,11 +374,12 @@ class owis:
 
         return True
 
-
-    def moveAbsZ(self, z):
+##obsolet???
+    def MOVA_Z(self, z):
 
         self.ser.write(bytes("PSET3=" + str(z) + "\r\n"), "utf-8")
         self.ser.write(b"PGO3\r\n")
+
         while True:
             if self.checkStatus() is True:
                 break
@@ -342,7 +394,7 @@ class owis:
         return True
 
 
-    def probe_moveAbs(self, x, y, z=None):
+    def MOPA(self, x, y, z=None):
 
         # z movement is not allowed here for now...
         if z != None:
@@ -357,9 +409,9 @@ class owis:
             pass
 
         # xy- needs to be seperated from z-movement for most probe station applications
-        self.moveAbsZ(z-self.zDrive)
-        self.moveAbsXY(x,y)
-        self.moveAbsZ(z)
+        self.MOVA_Z(z-self.zDrive)
+        self.MOVA_XY(x,y)
+        self.MOVA_Z(z)
         print("Position reached...")
 
         # get current position
@@ -367,42 +419,11 @@ class owis:
             self.ser.write(bytes("?CNT" + str(i+1) + "\r\n"), "utf-8")
             self.curPos[i] = self.ser.readline().decode("utf-8").replace("\r","")
 
-        print("New position [x, y, z]: " + str(self.curPos).replace("'",""))
+        print("New position [x, y, z]: " + str(self.ink_to_len(self.curPos)).replace("'",""))
 
         return True
 
 
-#############################
-# relative movement methods #
-#############################
-
-
-    def moveRel(self, x, y, z):
-
-        # check if request is within boundaries
-        self.checkRange(x, y, z, "Rel")
-
-        newPos = []
-        newPos.append(str(int(self.curPos[0]) + int(x)))
-        newPos.append(str(int(self.curPos[1]) + int(y)))
-        newPos.append(str(int(self.curPos[2]) + int(z)))
-
-        # send new destination to controller and start motor movement
-        for i, val in enumerate(newPos):
-            self.ser.write(bytes("PSET" + str(i+1) + "=" + newPos[i] + "\r\n"), "utf-8")
-            self.ser.write(bytes("PGO" + str(i+1) + "\r\n"), "utf-8")
-        print("Moving to new position...")
-
-        # status request: check current position until destination is reached
-        self.printPos(newPos)
-
-        # print current destination
-        for i, val in enumerate(newPos):
-            self.ser.write(bytes("?CNT" + str(i+1) + "\r\n"), "utf-8")
-            self.curPos[i] = self.ser.readline().decode("utf-8").replace("\r","")
-        print("New position [x, y, z]: " + str(self.curPos).replace("'",""))
-
-        return True
 
 
     def moveRelXY(self, x, y):
@@ -483,35 +504,46 @@ class owis:
 
 
     def ink_to_len(self, posList):
+        """ Converts list values from [inkrement] into [um]. The new values are
+        calculated according to the micro steps of the motor.
 
-        # convert list elements into integers
+        """
+
         temp = []
+
         for el in posList:
-            temp.append(int(el))
-        posList = temp
+            if el == "" or el == None:
+                temp.append(0)
+            else:
+                temp.append(float(el))
 
-        # converts [inkrements] into [um]
-        posList[0] = str(int(posList[0]/self.xSteps))
-        posList[1] = str(int(posList[1]/self.ySteps))
-        posList[2] = str(int(posList[2]/self.zSteps))
 
-        return posList
+        temp[0] = str(int(temp[0]/self.xSteps))
+        temp[1] = str(int(temp[1]/self.ySteps))
+        temp[2] = str(int(temp[2]/self.zSteps))
+
+        return temp
 
 
     def len_to_ink(self, posList):
+        """ Converts list values from [um] into [inkrement]. The new values are
+        calculated according to the micro steps of the motor.
 
-        # convert list elements into integers
+        """
+
         temp = []
+
         for el in posList:
-            temp.append(int(el))
-        posList = temp
+            if el == "" or el == None:
+                temp.append(0)
+            else:
+                temp.append(float(el))
 
-        # converts [um] to [inkrements]
-        posList[0] = str(int(posList[0]*self.xSteps))
-        posList[1] = str(int(posList[1]*self.ySteps))
-        posList[2] = str(int(posList[2]*self.zSteps))
+        temp[0] = str(int(temp[0]*self.xSteps))
+        temp[1] = str(int(temp[1]*self.ySteps))
+        temp[2] = str(int(temp[2]*self.zSteps))
 
-        return posList
+        return temp
 
 
 ###############
@@ -520,9 +552,14 @@ class owis:
 
 
     def writeLog(self):
+        """ Converts current position into [um] and writes it into a log file.
+
+        """
+
+        temp = self.ink_to_len(self.curPos)
 
         with open(self.logPath + self.logName, "w") as File:
-            File.write("{:>0}{:>20}{:>20}".format("x = " + self.curPos[0] , "y = " + self.curPos[1] , "z = " + self.curPos[2]))
+            File.write("{:>0}{:>20}{:>20}".format("x = " + temp[0] , "y = " + temp[1] , "z = " + temp[2]))
 
         print("Current position saved in Logfile...")
 
@@ -530,6 +567,9 @@ class owis:
 
 
     def readLog(self):
+        """ Reads log position and compares it with cuurent position.
+
+        """
 
         logPos = []
 
@@ -538,17 +578,9 @@ class owis:
             logPos.append(line[2])
             logPos.append(line[5])
             logPos.append(line[8])
-
-        if self.curPos != logPos:
+        print(self.curPos, self.len_to_ink(logPos))
+        if self.curPos != self.len_to_ink(logPos):
             return False
-
-#        for i in range(1, 4):
-#            self.ser.write(b"DISPCNT" + str(i) + "=" + self.curPos[i-1] + "\r\n")
-#            self.ser.write(b"CNT" + str(i) + "=" + self.curPos[i-1] + "\r\n")
-#
-#        print("Recent position coordinates were sent to controler ...")
-#        print("Current position [x, y, z]: " + str(self.curPos).replace("'",""))
-
         else:
             return True
 
@@ -575,29 +607,26 @@ class owis:
         return True
 
 
-    def test(self, axis=None):
+    def test(self):
+
+        print("###############################################################")
+        print("Test function started. Ready to send commands to controllers")
+        print("Table of commands: http://www.owis.eu/fileadmin/_migrated/content_uploads/PS_10_Betriebsanleitung_2014.pdf")
+        print("Type 'q' to exit and turn off motor.")
 
         while True:
             cmd = input("Enter command:")
 
-            if cmd == "q.":
+            if cmd == "q":
+                print("Test programm closed.")
+                self.motorOff()
                 break
             else:
-                if self.model is "PS35":
-                    self.ser.write(cmd + "\r\n")
-                    answer = self.ser.readline().decode("utf-8")
-                    print(answer)
-                elif self.model is "PS10":
-                    if axis == None:
-                        self.serList[0].write(bytes(cmd + "\r\n", "utf-8"))
-                        answer = self.serList[0].readline().decode("utf-8")
-                    else:
-                        self.serList[axis].write(bytes(cmd + "\r\n", "utf-8"))
-                        answer = self.serList[axis].readline().decode("utf-8")
+                self.ser.write(bytes(cmd + "\r\n", "utf-8"))
+                answer = self.ser.readline().decode("utf-8")
+                print(answer)
 
-                    print(answer)
         return True
-
 
 
 
@@ -609,13 +638,9 @@ if __name__=='__main__':
 
     try:
 
-        o = owis(port1="/dev/ttyACM4", port2="/dev/ttyACM2", port3="/dev/ttyACM5")
+        o = owis(port = "COM5")
         o.init()
         o.checkInit()
-
-
-        # o.ref()
-        # o.test(1)
 
 
 

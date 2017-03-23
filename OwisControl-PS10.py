@@ -128,7 +128,6 @@ class owis:
             else:
                 pass
 
-
         for val in self.curPos:
             # check if serial-timeout is sufficient
             if val == "":
@@ -156,9 +155,11 @@ class owis:
             print("Created new Logfile...")
         # check if motor position and log position are equal
         elif self.readLog() is False:
-            raise OwisError.SynchError("Motor position and position from log file are unequal!")
+            print("Warning: Display counter and motor position are unequal.")
+            # raise OwisError.SynchError("Motor position and position from log file are unequal!")
         else:
             return True
+
 
     def checkStatus(self):
 
@@ -190,7 +191,7 @@ class owis:
 
         checkList = [int(x),int(y),int(z)]
         rangeList = [self.xRange,self.yRange,self.zRange]
-        print(x)
+
         if (x not in range(0, self.xRange+1))\
         or (y not in range(0, self.yRange+1))\
         or (z not in range(0, self.zRange+1)):
@@ -252,8 +253,8 @@ class owis:
 
         print("status = " + str(status) + " ; position = " + str(self.ink_to_len(tempPos)))
 
-
         return True
+
 
     def freeMotor(self):
 
@@ -265,7 +266,7 @@ class owis:
                 status[i-1] = self.serList[i-1].readline().decode("utf-8").replace("\r","")
             else:
                 pass
-        print(status)
+
         for i in range(1, 4):
             if self.serList[i-1] is not None:
                 self.serList[i-1].write(b"INIT1\r\n")
@@ -273,8 +274,6 @@ class owis:
                 self.serList[i-1].write(b"EFREE1\r\n")
             else:
                 pass
-
-
 
         return True
 
@@ -285,16 +284,18 @@ class owis:
 
 
     def PS10_idnAxis(self):
-        """ PS10s come in a set of 3 controllers. They are assigned to x-, y-,
-        z- motor in respect to their serial number. The serial numbers are
-        stored in 'self.serial_nr' and the serial objects in 'self.serList'
-        are then ordered accordingly.
+        """ If you connect several PS10 controllers, the the port adresses are
+        assigned arbitrarily. To make sure that a certain controller is always
+        assigned to x-, y- or z-motor, you need to check their serials.
+        The serial numbers are stored in 'self.serial_nr' and the serial
+        objects in 'self.serList' are then ordered accordingly.
         """
-
 
         idnList = []
         tempList = [None,None,None]
         unknownList = []
+
+        # get all serials
         for ser in self.serList:
             if ser is not None:
                 ser.write(b"?SERNUM\r\n")
@@ -302,6 +303,7 @@ class owis:
             else:
                 pass
 
+        # serial objects are ordered
         for i, idn in enumerate(idnList):
             if idn in self.serial_nr:
                 if self.serial_nr.index(idn) is 0:
@@ -315,13 +317,13 @@ class owis:
                 print("Unknown serial number: " + idn)
                 unknownList.append(self.serList[i])
 
+        # unkown controllers are assigned at the end
         for ser in unknownList:
             for i, temp in enumerate(tempList):
                 if temp == None:
                     tempList[i] = ser
 
         self.serList = tempList
-
 
         return True
 
@@ -368,7 +370,7 @@ class owis:
             else:
                 pass
 
-        # check if desired position was reached
+        # check if desired position was reached, print, update logfile
         if newPos != self.curPos:
             raise ValueError("Couldn't reach desired destination. Run failed...")
         else:
@@ -379,6 +381,17 @@ class owis:
 
 
     def MOVR(self, x, y, z):
+
+        """ New position is calculated according to the relative values given.
+        Sends new position to controller and starts the movement. Position
+        is written into logfile if run is succesfull.
+        (x,y,z) arguments are considered as [um]. It is important to note
+        that the controller expects [inkrement] values!
+
+        Args:
+        x,y,z : int or str (value in [um])
+
+        """
 
         # convert relative into absolute positions
         newPos = [None,None,None]
@@ -395,17 +408,21 @@ class owis:
         return True
 
 
-    def ref(self, mode=None):
+    def REFDRIVE(self, mode=None):
 
         # set reference mask for x, y, z
         for i in range(1, 4):
-            if self.serList[i-1] is not None:
+            if self.serList[i-1] is not None and i < 3:
+                # 1 = 0001 = MINSTOP
                 # 2 = 0010 = MINDEC
                 self.serList[i-1].write(b"RMK1=2\r\n")
+            # z-motor only has MINSTOP limit switch
+            elif self.serList[i-1] is not None and i == 3:
+                self.serList[i-1].write(b"RMK1=1\r\n")
             else:
                 pass
 
-        # set reference run velocity for x, y, z (std val = 41943)
+        # set reference run velocity for x, y, z (std val = 4000)
         for i in range(1, 4):
             if self.serList[i-1] is not None:
                 self.serList[i-1].write(b"RVELS1=1000\r\n")
@@ -443,7 +460,7 @@ class owis:
             else:
                 pass
 
-        # check if desired position was reached
+        # check if desired position was reached, print, update logfile
         if self.curPos != ["0","0","0"]:
             raise ValueError("Couldn't reach desired destination. Run failed...")
         else:
@@ -465,7 +482,6 @@ class owis:
         print("Motors are off...")
 
         return True
-
 
 
 ######################
@@ -556,30 +572,44 @@ class owis:
             return True
 
 
-
 ################
 # test methods #
 ################
 
 
-    def test_drive(self, Filename):
-
-        z = self.curPos[2]
-        path = os.getcwd()
-
-        print("Start test drive according to " + Filename[1:])
-        with open(path + Filename, "r") as File:
-            for line in File:
-                try:
-                    (x,y) = line.split()
-                    self.probe_moveAbs(int(x)*self.xSteps,int(y)*self.xSteps,z)
-                except:
-                    pass
-
-        return True
+    # def test_drive(self, Filename):
+    #
+    #     z = self.curPos[2]
+    #     path = os.getcwd()
+    # 
+    #     print("Start test drive according to " + Filename[1:])
+    #     with open(path + Filename, "r") as File:
+    #         for line in File:
+    #             try:
+    #                 (x,y) = line.split()
+    #                 self.probe_moveAbs(int(x)*self.xSteps,int(y)*self.xSteps,z)
+    #             except:
+    #                 pass
+    #
+    #     return True
 
 
     def test(self, axis=None):
+
+        if axis == None or axis == 0:
+            controller = "x"
+        elif axis == 1:
+            controller = "y"
+        elif axis == 2:
+            controller = "z"
+        else:
+            raise ValueError("Unkown argument.")
+
+        print("###############################################################")
+        print("Test function started. Ready to send commands "
+              "to %s-controller." %controller)
+        print("Table of commands: http://www.owis.eu/fileadmin/_migrated/content_uploads/PS_10_Betriebsanleitung_2014.pdf")
+        print("Type 'q' to exit and turn off motor.")
 
         while True:
             cmd = input("Enter command:")
@@ -615,11 +645,15 @@ if __name__=='__main__':
         o.checkInit()
         # o.checkLog()
         # o.freeMotor()
-        # o.MOVA(8000,0,0)
+        # for i in range(1, 5):
+        #     o.MOVA(1000,1000,4000)
+        #     time.sleep(2)
+        #     o.REFDRIVE()
+        # o.motorOff()
         # o.MOVA(10000,0,0)
         # o.MOVR(10000,1000,0)
-        # o.ref()
-        o.test(2)
+        # o.REFDRIVE()
+        # o.test(0)
 
 
 
