@@ -19,8 +19,9 @@ print('Python Motor Server for OWIS stages')
 print('(c) IEKP, March 2017')
 print()
 print('Server listening on %s, port %s' % server_address)
+print()
 
-# Bind socket sock with the server adress local host with port 10000
+# Bind socket "sock" with the server_address
 sock.bind(server_address)
 
 # Listen for incoming connections
@@ -30,9 +31,8 @@ try:
     while True:
         # Wait for a connection / press Ctrl+Break(Pause) to abort
         print()
-        print('Waiting for a client connection...')
+        print('Listening to socket...')
         connection, client_address = sock.accept()
-
 
         # Receive the data in small chunks and retransmit it
         try:
@@ -58,9 +58,10 @@ try:
                     connection.sendall(bytes("OK_" + curPos, "utf-8"))
                     init_done = True
 
-                # if motor was already initialized...
+                # if motor was already initialized before
                 elif "INIT" in data.decode("utf-8") and init_done == True:
                     curPos = o.getPos("str")
+                    print("Axes already initialized...")
                     connection.sendall(bytes("OK_" + curPos, "utf-8"))
 
                 # perform reference run
@@ -72,7 +73,6 @@ try:
                 # move to absolute position
                 elif "MOVA_" in data.decode("utf-8") and init_done == True:
                     newPos = data[5:].decode("utf-8").split(",")
-                    print(newPos)
                     o.MOVA(newPos[0],newPos[1],newPos[2])
                     curPos = o.getPos("str")
                     connection.sendall(bytes("OK_" + curPos, "utf-8"))
@@ -101,7 +101,6 @@ try:
                 # turn off motor and write position to log file
                 elif "STOP" in data.decode("utf-8"):
                     curPos = o.getPos("str")
-                    o.writeLog()
                     connection.sendall(bytes("OK_" + curPos, "utf-8"))
                     break
 
@@ -119,10 +118,12 @@ try:
                 elif data.decode("utf-8") not in comList and data.decode("utf-8") != "":
                     connection.sendall(bytes("ER_666", "utf-8"))
 
-
                 else:
                     print ('No more data from %s' %str(client_address[0]))
                     break
+
+        except ValueError:
+            connection.sendall(bytes("ER_126", "utf-8"))
 
         except OwisError.ComError:
             connection.sendall(bytes("ER_123", "utf-8"))
@@ -139,8 +140,8 @@ try:
 
     # turn off motor and write position to log file
     if init_done == True:
-        o.writeLog()
         o.motorOff()
+        o.writeLog()
     else:
         pass
 

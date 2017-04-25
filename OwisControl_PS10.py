@@ -16,15 +16,16 @@ class owis:
         self.serial_nr = ["08070255","08070256","08070257"]
         self.serList = []
 
-        # x_max is about 20000um = 1000000 ink
-        self.xRange = 1000000
-        # x_max is about 20000um = 1000000 ink
-        self.yRange = 1000000
+        # for ALiBaVa motor stages from 2008
+        # x_max is about 105000um = 1050000 ink
+        self.xRange = 1050000
+        # x_max is about 105000um = 1050000 ink
+        self.yRange = 1050000
         # z_max is about 12000um = 600000 ink
         self.zRange = 600000
 
-        self.xSteps = 50
-        self.ySteps = 50
+        self.xSteps = 10
+        self.ySteps = 10
         self.zSteps = 50
 
         self.zDrive = None
@@ -36,7 +37,7 @@ class owis:
         # default parameters for serial port
         self.baudrate = 9600
         self.bytesize = 8
-        self.timeout = 0.14
+        self.timeout = 0.2
 
 
     def init(self):
@@ -78,7 +79,7 @@ class owis:
             else:
                 pass
 
-            print("Initializing...")
+            print("Initializing motors...")
 
             # initialize x, y, z-axis with saved default parameters
             for i in range(1, 4):
@@ -88,10 +89,10 @@ class owis:
                     pass
 
         except:
-            raise OwisError.ComError("Comport is already claimed or can not be found!")
+            raise OwisError.ComError("COM port is already claimed or can not be found!")
 
         # set terminal mode to '0' (short answer)
-        # controller that was set to 'TERM=2' will send one last 'OK'
+        # controllers that were set to 'TERM=2' will send one last 'OK'
         for i in range(1, 4):
             if self.serList[i-1] is not None:
                 self.serList[i-1].write(b"TERM=0\r\n")
@@ -119,6 +120,26 @@ class owis:
 
     def checkInit(self):
 
+        # check if initialization was successful and axes are ready
+        status = [None,None,None]
+        try:
+            for i in range(1, 4):
+                if self.serList[i-1] is not None:
+                    self.serList[i-1].write(b"?ASTAT\r\n")
+                    status[i-1] = self.serList[i-1].readline().decode("utf-8").replace("\r","")
+                    if status[i-1] != "R":
+                        raise
+                    else:
+                        pass
+                else:
+                    pass
+        except:
+            print("Axes status: " + str(status).replace("'",""))
+            raise ValueError("initialization of axis " + str(i-1) +
+                             " was not successful.")
+
+        print("Axes status OK: " + str(status).replace("'",""))
+
         # request current motor position (no display here)
         self.curPos = [None,None,None]
         for i in range(1, 4):
@@ -134,13 +155,11 @@ class owis:
                 raise OwisError.ComError("Could not get proper position information in time!")
             #check if current position is in the expected range
             elif val != None and int(val) < 0:
-                print("Warning: Unexpected axis positions. Motor needs to be calibrated!")
+                print("Warning: Unexpected axis positions. Motors need to be referenced!")
                 # raise OwisError.SynchError("Unexpected axis positions. Motor needs to be calibrated!")
             else:
                 pass
 
-        # print("Current position in (ink) [x, y, z]: " \
-        #       + str(self.curPos).replace("'",""))
         print("Current position in (um) [x, y, z]: [" \
               + self.getPos("str") + "]")
 
@@ -155,8 +174,8 @@ class owis:
             print("Created new Logfile...")
         # check if motor position and log position are equal
         elif self.readLog() is False:
-            print("Warning: Display counter and motor position are unequal.")
-            # raise OwisError.SynchError("Motor position and position from log file are unequal!")
+            print("Warning: Display counter and motor position are not the same.")
+            # raise OwisError.SynchError("Motor position and position from log file are not the same!")
         else:
             return True
 
@@ -199,13 +218,13 @@ class owis:
     def checkRange(self, x, y, z):
         """ Checks if new position is within the accepted range according to
         the 'self.(x,y,z)Range' values. Only absolute values can be checked.
-        Method expects arguments to be in [um].
+        Method expects arguments to be in [ink].
 
         """
 
         checkList = [int(x),int(y),int(z)]
         rangeList = [self.xRange,self.yRange,self.zRange]
-
+        print()
         if (checkList[0] not in range(0, self.xRange+1))\
         or (checkList[1] not in range(0, self.yRange+1))\
         or (checkList[2] not in range(0, self.zRange+1)):
@@ -322,7 +341,7 @@ class owis:
 
     def MOVA(self, x, y, z):
         """ Sends new position to controller and starts the movement. Position
-        is written into logfile if run is succesfull.
+        is written into logfile if run is successful.
         (x,y,z) arguments are considered as [um]. It is important to note
         that the controller expects [inkrement] values!
 
@@ -339,7 +358,7 @@ class owis:
             newPos = self.len_to_ink([x,y,z])
 
             # check if request is within boundaries
-            self.checkRange(x, y, z)
+            self.checkRange(newPos[0], newPos[1], newPos[2])
 
             # send new destination to controller and start motor movement
             for i, val in enumerate(newPos):
@@ -380,7 +399,7 @@ class owis:
 
         """ New position is calculated according to the relative values given.
         Sends new position to controller and starts the movement. Position
-        is written into logfile if run is succesfull.
+        is written into logfile if run is successful.
         (x,y,z) arguments are considered as [um]. It is important to note
         that the controller expects [inkrement] values!
 
@@ -397,7 +416,9 @@ class owis:
                 newPos[i] = int(self.curPos[i]) + int(tempList[i])
             else:
                 pass
+
         newPos = self.ink_to_len(newPos)
+
         # from here on it is basically an absolute movement
         self.MOVA(newPos[0],newPos[1],newPos[2])
 
@@ -412,7 +433,7 @@ class owis:
                 # 1 = 0001 = MINSTOP
                 # 2 = 0010 = MINDEC
                 self.serList[i-1].write(b"RMK1=2\r\n")
-            # old z-motor only has MINSTOP limit switch
+            # ALiBaVa and Probe3 z-motor only has MINSTOP limit switch (no DEC)
             elif self.serList[i-1] is not None and i == 3:
                 self.serList[i-1].write(b"RMK1=1\r\n")
             else:
@@ -458,7 +479,7 @@ class owis:
 
         # check if desired position was reached, print, update logfile
         if self.curPos != ["0","0","0"]:
-            raise ValueError("Couldn't reach desired destination. Run failed...")
+            raise ValueError("Couldn't reach desired reference destination. Run failed...")
         else:
             print("New position [x, y, z]: " + str(self.ink_to_len(self.curPos)).replace("'",""))
             self.writeLog()
@@ -564,7 +585,7 @@ class owis:
 
 
     def readLog(self):
-        """ Reads log position and compares it with cuurent position.
+        """ Reads log position and compares it with curent position.
 
         """
 
@@ -613,16 +634,16 @@ class owis:
         elif axis == 2:
             controller = "z"
         else:
-            raise ValueError("Unkown argument.")
+            raise ValueError("Unknown argument.")
 
         print("###############################################################")
         print("Test function started. Ready to send commands "
               "to %s-controller." %controller)
-        print("Table of commands: http://www.owis.eu/fileadmin/_migrated/content_uploads/PS_10_Betriebsanleitung_2014.pdf")
-        print("Type 'q' to exit and turn off motor.")
+        print("Table of commands: see http://www.owis.eu/fileadmin/_migrated/content_uploads/PS_10_Betriebsanleitung_2014.pdf")
+        print("Type 'q' and enter to turn off motor and exit.")
 
         while True:
-            cmd = input("Enter command:")
+            cmd = input("Enter command: ")
 
             if cmd == "q":
                 print("Test programm closed.")
@@ -641,12 +662,8 @@ class owis:
 
 
 
-
-
-
 # main loop
 if __name__=='__main__':
-
 
     try:
 
@@ -654,19 +671,16 @@ if __name__=='__main__':
         o.init()
         o.checkInit()
         # o.checkLog()
-        # o.freeMotor()
+        # o.freeMotor(2)
         # for i in range(1, 5):
         #     o.MOVA(1000,1000,4000)
         #     time.sleep(2)
         #     o.REFDRIVE()
         # o.motorOff()
         # o.MOVA(15000,15000,7000)
-        o.MOVR(1000,1000,0)
+        # o.MOVR(0,0,14000)
         # o.REFDRIVE()
-        # o.test(0)
-
-
-
+        # o.test(2)
 
 
     except(KeyboardInterrupt):
