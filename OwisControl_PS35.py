@@ -143,7 +143,6 @@ class owis:
         while True:
             self.ser.write(b"?ASTAT\r\n")
             status = self.ser.readline().decode("utf-8").replace("\r","")
-            print(status)
             if mode == "print":
                 self.printAll(status)
             else:
