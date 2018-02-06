@@ -1,6 +1,7 @@
 import socket
 import sys, os
 import OwisControl_PS10
+import OwisControl_PS35
 import OwisError
 
 server_name = "localhost"
@@ -16,7 +17,7 @@ sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 server_address = (server_name, port)
 print()
 print('Python Motor Server for OWIS stages')
-print('(c) IEKP, March 2017')
+print('(c) Marius Metzler, ETP, March 2017')
 print()
 print('Server listening on %s, port %s' % server_address)
 print()
@@ -40,6 +41,7 @@ try:
             while True:
                 data = connection.recv(64)
 
+
                 if data.decode("utf-8") == "":
                     pass
                 else:
@@ -49,9 +51,7 @@ try:
                 # initialize motor and get current position
                 if "INIT" in data.decode("utf-8") and init_done == False:
                     #TODO: Controller type and port names need to be variable
-                    o = OwisControl_PS10.owis("/dev/ttyACM0",
-                                              "/dev/ttyACM1",
-                                              "/dev/ttyACM2")
+                    o = OwisControl_PS35.owis("COM5")
                     o.init()
                     o.checkInit()
                     curPos = o.getPos("str")
