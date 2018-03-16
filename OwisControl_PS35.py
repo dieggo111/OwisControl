@@ -1,10 +1,6 @@
 # coding=utf-8
-import serial
-import time
-import sys, os
+import serial, time, os
 import OwisError
-
-
 
 class owis:
 
@@ -12,8 +8,10 @@ class owis:
 
 
         self.logPath = os.getcwd()
-        # back slash for windows :(
-        self.logName = "\Logfile.txt"
+        self.logName = "Logfile.txt"
+        self.axis_timeout = 120
+        self.ref_timeout = 40
+        self.curPos = []
 
         # for Owis motor stages from 2016
         # x_max is about 195 mm =  1400000 ink
@@ -90,7 +88,6 @@ class owis:
     def checkInit(self):
 
         # request current motor position and display values
-        self.curPos = []
         display_counter = []
         for i in range(1, 4):
             self.ser.write(bytes("?CNT" + str(i) + "\r\n", "utf-8"))
@@ -123,7 +120,7 @@ class owis:
     def checkLog(self):
 
         # create logfile if it isn't there
-        if os.path.isfile(self.logPath + self.logName) is False:
+        if os.path.isfile(os.path.join(self.logPath,self.logName)) is False:
             self.writeLog()
             print("Created new Logfile...")
         # check if motor position and log position are equal
@@ -133,27 +130,31 @@ class owis:
             return True
 
 
-    def checkStatus(self, mode=None):
-        """ Checks and prints axis and position status if
-        'mode' argument is 'True'. A 'True' value is returned as soon as
-        movement is finished.
+    def checkStatus(self, mode=None, timeout=None):
+        """ Checks axis status and returns 'true' when movement is finished
+        ('RRR').
+        args:
+        'mode'      : prints status tripplet if 'print'
+        'timeout'   : terminates the loop if time has run out (time in sec,
+                      default is no timeout)
 
         """
-
+        if timeout != None:
+            end_time = time.time() + timeout
+        else:
+            end_time = None
         while True:
             self.ser.write(b"?ASTAT\r\n")
             status = self.ser.readline().decode("utf-8").replace("\r","")
             if mode == "print":
                 self.printAll(status)
-            else:
-                pass
-
             if status == "RRR":
                 return True
                 break
+            elif end_time != None and time.time() > end_time:
+                return "timeout"
             else:
                 return False
-
 
     def checkRange(self, x, y, z):
         """ Checks if new position is within the accepted range according to
@@ -270,7 +271,7 @@ class owis:
         self.checkRange(newPos[0],newPos[1],newPos[2])
 
         # send new destination to controller and start motor movement
-        for i, val in enumerate(newPos):
+        for i in enumerate(newPos):
             self.ser.write(bytes("PSET" + str(i+1) + "=" + newPos[i] + "\r\n", "utf-8"))
             self.ser.write(bytes("PGO" + str(i+1) + "\r\n", "utf-8"))
 
@@ -280,11 +281,15 @@ class owis:
         while True:
             if self.checkStatus() == True:
                 break
+            elif self.checkStatus(timeout=self.axis_timeout) == "timeout":
+                self.motorOff()
+                raise ValueError("Warning: Movement error. Couldn't reach " +
+                                 "expected position in time.")
             else:
                 pass
 
         # read-out final position
-        for i, val in enumerate(newPos):
+        for i in enumerate(newPos):
             self.ser.write(bytes("?CNT" + str(i+1) + "\r\n", "utf-8"))
             self.curPos[i] = self.ser.readline().decode("utf-8").replace("\r","")
 
@@ -356,13 +361,24 @@ class owis:
 
 
         # status request: check current position and status until destination is reached
+        # BUG: there's a bug with z-axis on PS1 that forces me to intercept a stuck axis"
         while True:
-            if self.checkStatus("print") == True:
+            if self.checkStatus(mode="print",timeout=self.ref_timeout) == True:
+                break
+            elif self.checkStatus(mode="print",timeout=self.ref_timeout) == "timeout":
+                print("Warning: Axis got stuck.")
+                self.motorOff()
+                self.init()
                 break
             else:
                 pass
 
         print("Reference run finished...")
+
+        # BUG: z axis counter are resetting automatically on PS1, so I gotta do it manually
+        for i in range(1, 4):
+            self.ser.write(bytes("CNT" + str(i) + "=0" + "\r\n", "utf-8"))
+            self.ser.write(bytes("DISPCNT" + str(i) + "=0" + "\r\n", "utf-8"))
 
         # read-out final position
         for i in range(1, 4):
@@ -409,7 +425,6 @@ class owis:
 
     def MOVA_Z(self, z):
 
-
         self.ser.write(bytes("PSET3=" + str(z) + "\r\n", "utf-8"))
         self.ser.write(b"PGO3\r\n")
 
@@ -442,7 +457,7 @@ class owis:
 #            pass
 
         # check if request is within boundaries
-        self.checkRange(newPos[0],newPos[1],newPos[2])
+        # self.checkRange(newPos[0],newPos[1],newPos[2])
 
         # xy- needs to be seperated from z-movement for most probe station applications
         self.MOVA_Z(int(newPos[2])-self.zDrive)
@@ -472,8 +487,8 @@ class owis:
         newRel = self.len_to_ink([x,y,z])
 
         # TODO: as long as z-stage bug is present
-        if int(self.curPos[2])-self.zDrive-int(newRel[2]) < (-200000):
-            raise OwisError.MotorError("Destination is out of motor range!")
+        # if int(self.curPos[2])-self.zDrive-int(newRel[2]) < (-200000):
+            # raise OwisError.MotorError("Destination is out of motor range!")
 
         # pure z-movements don't need zDrive
         if (x,y) == ("0","0"):
@@ -555,7 +570,7 @@ class owis:
 
         temp = self.ink_to_len(self.curPos)
 
-        with open(self.logPath + self.logName, "w") as File:
+        with open(os.path.join(self.logPath,self.logName), "w") as File:
             File.write("{:>0}{:>20}{:>20}".format("x = " + temp[0] , "y = " + temp[1] , "z = " + temp[2]))
 
         print("Current position saved in Logfile...")
@@ -570,7 +585,7 @@ class owis:
 
         logPos = []
 
-        with open(self.logPath + self.logName, "r") as File:
+        with open(os.path.join(self.logPath,self.logName), "r") as File:
             line = File.readline().split()
             logPos.append(line[2])
             logPos.append(line[5])
@@ -597,7 +612,7 @@ class owis:
             for line in File:
                 try:
                     (x,y) = line.split()
-                    self.probe_moveAbs(int(x)*self.xSteps,int(y)*self.xSteps,z)
+                    self.MOVA(int(x)*self.xSteps,int(y)*self.xSteps,z)
                 except:
                     pass
 
@@ -634,21 +649,21 @@ if __name__=='__main__':
 
 
     try:
-
         o = owis(port = "COM5")
         o.init()
         o.checkInit()
         o.test()
-#        o.MOPR(0,0,-1000)
+        # o.MOPR(0,0,-1000)
 #        o.MOPA(60000,60000,-130000)
 #         o.REFDRIVE()
 #        o.motorOff()
     except(KeyboardInterrupt):
         print()
         print("Run interrupted.")
+
+
+    finally:
         o.motorOff()
-
-
 
 
 #    print("Run time: " + str(time.time()-start))
